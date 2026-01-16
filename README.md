@@ -84,7 +84,9 @@ src/
 
 **Desktop aplikace pro automatické nahrávání videí**
 
-**Stav: [████....] 4%**
+**Stav: 4%**
+
+![Stav](https://progress-bar.dev/4/?scale=100&width=200&color=47848F&style=flat-square)
 
 </div>
 

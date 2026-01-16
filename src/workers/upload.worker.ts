@@ -80,87 +80,6 @@ interface UploadParams {
 }
 
 /**
- * ChunkedFileReader - mimics Python's ChunkReader for streaming file uploads
- * Uses synchronous file operations to avoid GC issues with FileHandle
- */
-class ChunkedFileReader {
-  private filePath: string
-  private fd: number = -1
-  private chunkSize: number
-  private _totalSize: number
-  private _position: number = 0
-  private readonly throttleMs: number = 3 // Match Python's 3ms sleep
-  private nochunk: boolean = false
-
-  constructor(filePath: string, chunkSize: number = 2 * 1024 * 1024, nochunk: boolean = false) {
-    this.filePath = filePath
-    this.chunkSize = chunkSize
-    this.nochunk = nochunk
-
-    const stats = fs.statSync(filePath)
-    this._totalSize = stats.size
-  }
-
-  open(): void {
-    this.fd = fs.openSync(this.filePath, 'r')
-    this._position = 0
-  }
-
-  read(size?: number): Buffer | null {
-    if (this.fd < 0) {
-      throw new Error('File not opened. Call open() first.')
-    }
-
-    const readSize = size && size > 0 ? Math.max(size, this.chunkSize) : this.chunkSize
-    const remaining = this._totalSize - this._position
-
-    if (remaining <= 0) {
-      return null
-    }
-
-    const toRead = Math.min(readSize, remaining)
-    const buffer = Buffer.alloc(toRead)
-    const bytesRead = fs.readSync(this.fd, buffer, 0, toRead, this._position)
-
-    this._position += bytesRead
-
-    // Throttle for disk IO (matching Python behavior)
-    if (!this.nochunk && this.throttleMs > 0) {
-      // Use synchronous sleep to avoid timing issues
-      const start = Date.now()
-      while (Date.now() - start < this.throttleMs) {
-        // busy wait
-      }
-    }
-
-    if (bytesRead < toRead) {
-      return buffer.subarray(0, bytesRead)
-    }
-
-    return buffer
-  }
-
-  close(): void {
-    if (this.fd >= 0) {
-      fs.closeSync(this.fd)
-      this.fd = -1
-    }
-  }
-
-  get position(): number {
-    return this._position
-  }
-
-  set position(value: number) {
-    this._position = value
-  }
-
-  get totalSize(): number {
-    return this._totalSize
-  }
-}
-
-/**
  * Calculate smoothed upload speed using moving average (matching Python pattern)
  */
 function calculateSmoothedSpeed(
@@ -304,11 +223,20 @@ async function uploadToCDN(
   const cdnUrl = new URL(CDN_URL)
   const protocol = cdnUrl.protocol === 'https:' ? https : http
 
+  // SSL konfigurace - zakázat ověřování jako Python verify=False
+  // Přidané kvůli EPROTO error na CDN serveru
+  const sslAgent = new https.Agent({
+    rejectUnauthorized: false,
+    maxVersion: 'TLSv1.3',
+    minVersion: 'TLSv1.2',
+  })
+
   const options: http.RequestOptions = {
     hostname: cdnUrl.hostname,
     port: cdnUrl.port || 443,
     path: cdnUrl.pathname,
     method: 'POST',
+    agent: cdnUrl.protocol === 'https:' ? sslAgent : undefined,
     headers: {
       'Content-Type': `multipart/form-data; boundary=${boundary}`,
       'Content-Length': String(contentLength),
@@ -333,10 +261,13 @@ async function uploadToCDN(
   console.log(`[UPLOAD] CDN URL: ${cdnUrl.href} (Content-Length=${contentLength})`)
 
   try {
-    // Promise resolver for upload completion (declared BEFORE callbacks)
+    // Promise resolver for upload completion (MUST be set BEFORE request callback!)
     let uploadResolve: ((success: boolean) => void) | undefined
+    const uploadPromise = new Promise<boolean>((resolve) => {
+      uploadResolve = resolve
+    })
 
-    // Create the HTTP request
+    // Create the HTTP request (response callback will use uploadResolve)
     const req = protocol.request(options, (res) => {
       let body = ''
       res.on('data', (chunk) => { body += chunk })
@@ -360,29 +291,19 @@ async function uploadToCDN(
     // Write preamble FIRST (before file data)
     req.write(preamble)
 
-    // Stream file with ChunkedFileReader (configurable SSL chunk size from app.yaml)
-    const reader = new ChunkedFileReader(filePath, config.MAX_SSL_CHUNK_SIZE, false)
+    // Stream file using fs.createReadStream (simple approach matching Python)
     let bytesSent = 0
     let lastTime = Date.now()
     let lastBytes = 0
-    let lastSpeedBps = 0  // Store speed in B/s for onProgress
+    let lastSpeedBps = 0
 
-    // Async function to stream file chunks with proper drain handling
-    const sendChunk = async (): Promise<boolean> => {
-      const chunk = reader.read()
+    const fileStream = fs.createReadStream(filePath, {
+      highWaterMark: config.MAX_SSL_CHUNK_SIZE
+    })
 
-      if (!chunk) {
-        // Send closing boundary
-        req.write(closing)
-        req.end()
-        reader.close()
-        return true
-      }
-
-      // Wait for buffer to drain if full
-      while (!req.write(chunk)) {
-        await new Promise(resolve => req.once('drain', resolve))
-      }
+    fileStream.on('data', (chunk: Buffer) => {
+      // Write chunk synchronously - let Node.js handle backpressure
+      req.write(chunk)
 
       bytesSent += chunk.length
 
@@ -402,19 +323,23 @@ async function uploadToCDN(
       }
 
       onProgress(progress, bytesSent, fileSize, lastSpeedBps)
-
-      // Continue with next chunk
-      return sendChunk()
-    }
-
-    // Open reader and start streaming
-    reader.open()
-    await sendChunk()
-
-    // Wait for response
-    return await new Promise<boolean>((resolve) => {
-      uploadResolve = resolve
     })
+
+    fileStream.on('end', () => {
+      // Send closing boundary and end request
+      req.write(closing)
+      req.end()
+      console.log('[UPLOAD] File data sent, waiting for CDN response...')
+    })
+
+    fileStream.on('error', (err) => {
+      console.error('[UPLOAD] File stream error:', err)
+      req.destroy()
+      uploadResolve?.(false)
+    })
+
+    // Wait for response (uploadPromise resolves when uploadResolve is called)
+    return uploadPromise
 
   } catch (error) {
     console.error(`[UPLOAD] Error with CDN URL:`, error instanceof Error ? error.message : error)

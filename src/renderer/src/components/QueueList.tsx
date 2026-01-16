@@ -137,9 +137,9 @@ function SortableQueueItem({
               {/* Phase label */}
               <div className="flex items-center gap-2">
                 <span className="text-xs font-medium text-accent">
-                  {item.phase === 'upload' ? '↑ Nahrávání' :
-                   item.subPhase === 'assembling' ? '↓ Compiling chunks' :
-                   '↓ Stahování'}
+                  {item.phase === 'upload' ? '↑ Nahrávání ' :
+                   item.subPhase === 'assembling' ? '↓ Compiling chunks ' :
+                   '↓ Stahování '}
                   [{((item.phase === 'upload' ? item.uploadProgress : item.progress) || 0).toFixed(2)}%]
                 </span>
               </div>

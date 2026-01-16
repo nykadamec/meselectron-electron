@@ -1,0 +1,60 @@
+{
+  "name": "prehrajto-autopilot",
+  "version": "0.1.0",
+  "description": "Prehraj.to AutoPilot - Desktop application for video management",
+  "main": "dist/main/index.js",
+  "appName": "Prehraj.to AutoPilot",
+  "scripts": {
+    "sync": "node scripts/sync-config.js",
+    "sync:watch": "node --watch scripts/sync-config.js",
+    "dev": "electron-vite dev",
+    "build": "npm run sync && electron-vite build && tsc -p tsconfig.workers.json && for f in dist/workers/*.worker.js; do mv \"$f\" \"${f%.js}.cjs\" 2>/dev/null || true; done",
+    "build:main": "tsc -p tsconfig.node.json",
+    "build:workers": "tsc -p tsconfig.workers.json",
+    "build:mac": "electron-builder --mac --arm64",
+    "build:win": "electron-builder --win --x64",
+    "build:all": "electron-builder --mac --arm64 --win --x64",
+    "preview": "electron-vite preview",
+    "test": "vitest"
+  },
+  "keywords": [
+    "electron",
+    "video",
+    "automation"
+  ],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "dependencies": {
+    "@dnd-kit/core": "^6.3.1",
+    "@dnd-kit/sortable": "^10.0.0",
+    "@dnd-kit/utilities": "^3.2.2",
+    "axios": "^1.13.2",
+    "electron-updater": "^6.7.3",
+    "fluent-ffmpeg": "^2.1.3",
+    "lucide-react": "^0.562.0",
+    "react": "^19.2.3",
+    "react-dom": "^19.2.3",
+    "zustand": "^5.0.10"
+  },
+  "devDependencies": {
+    "@ffmpeg-installer/ffmpeg": "^1.1.0",
+    "@tailwindcss/postcss": "^4.1.18",
+    "@types/fluent-ffmpeg": "^2.1.27",
+    "@types/node": "^25.0.8",
+    "@types/react": "^19.2.8",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^5.1.2",
+    "@vitest/ui": "^4.0.17",
+    "autoprefixer": "^10.4.23",
+    "electron": "^39.2.7",
+    "electron-builder": "^26.4.0",
+    "electron-vite": "^5.0.0",
+    "js-yaml": "^4.1.1",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^4.1.18",
+    "typescript": "^5.9.3",
+    "vite": "^7.3.1",
+    "vitest": "^4.0.17"
+  }
+}

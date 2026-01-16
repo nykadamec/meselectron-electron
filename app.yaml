@@ -1,0 +1,6 @@
+app:
+  name: "prehrajto-autopilot"
+  app_name: "Prehraj.to AutoPilot"
+  version: "0.1.0"
+  description: "Prehraj.to AutoPilot - Desktop application for video management"
+  environment: "development"

@@ -1,0 +1,17 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "CommonJS",
+    "lib": ["ES2020"],
+    "skipLibCheck": true,
+    "moduleResolution": "node",
+    "strict": false,
+    "noImplicitAny": false,
+    "outDir": "./dist/workers",
+    "rootDir": "./src/workers",
+    "noEmit": false,
+    "types": ["node"],
+    "esModuleInterop": true
+  },
+  "include": ["src/workers/**/*.ts"]
+}

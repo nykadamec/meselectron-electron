@@ -2,5 +2,8 @@ app:
   name: "prehrajto-autopilot"
   app_name: "Prehraj.to AutoPilot"
   version: "0.1.0"
+  build: "261515"
   description: "Prehraj.to AutoPilot - Desktop application for video management"
   environment: "development"
+config:
+  MAX_UPLOAD_SIZE: 2 * 1024 * 1024 * 1024 # 2 GB

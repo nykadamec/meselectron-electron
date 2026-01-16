@@ -216,6 +216,7 @@ export function QueueList({
         if (!queueItem) return true
         return item.id !== queueItem.id ||
           item.progress !== queueItem.progress ||
+          item.uploadProgress !== queueItem.uploadProgress ||
           item.speed !== queueItem.speed ||
           item.eta !== queueItem.eta ||
           item.size !== queueItem.size ||

@@ -39,6 +39,69 @@ function parseCookieFile(content: string): string {
 }
 
 /**
+ * Parse file size from video card in listing page
+ * Looks for: <div class="video__tag video__tag--size">1.37 GB</div>
+ */
+function parseSizeFromContext(context: string): string | null {
+  const sizePattern = /<div[^>]*class="video__tag video__tag--size"[^>]*>([^<]+)<\/div>/i
+  const match = context.match(sizePattern)
+  if (match && match[1]) {
+    return match[1].trim() // "1.37 GB"
+  }
+  return null
+}
+
+/**
+ * Parse file size from individual video page
+ * Looks for:
+ * <li>
+ *     <span class="color-primary">Velikost:</span>
+ *     <span>1.37 GB</span>
+ * </li>
+ */
+function parseSizeFromVideoPage(html: string): string | null {
+  const sizePattern = /<span[^>]*class="color-primary"[^>]*>Velikost:<\/span>\s*<span>([^<]+)<\/span>/i
+  const match = html.match(sizePattern)
+  if (match && match[1]) {
+    return match[1].trim() // "1.37 GB"
+  }
+  return null
+}
+
+/**
+ * Convert and format file size to GB with fixed width
+ * Examples: "2.76 GB" → "  2.76 GB", "711.13 MB" → "  0.69 GB"
+ */
+function formatSize(size: string): string {
+  // Parse size and unit
+  const match = size.match(/^([\d.]+)\s*([GMK]B)$/i)
+  if (!match) return size // Return as-is if parsing fails
+
+  const value = parseFloat(match[1])
+  const unit = match[2].toUpperCase()
+
+  // Convert to GB
+  let gbValue: number
+  switch (unit) {
+    case 'GB':
+      gbValue = value
+      break
+    case 'MB':
+      gbValue = value / 1024
+      break
+    case 'KB':
+      gbValue = value / (1024 * 1024)
+      break
+    default:
+      gbValue = value
+  }
+
+  // Format: "2.76 GB" and pad to centered width (e.g., "  2.76 GB  ")
+  const formatted = `${gbValue.toFixed(2)} GB`  // "2.76 GB" = 7 chars
+  return formatted.padEnd(9, ' ').padStart(11, ' ') // Center in 11 chars
+}
+
+/**
  * Extract video links from a prehrajto.cz listing page
  * Matches Python implementation in download.py:extract_video_links()
  */
@@ -68,14 +131,38 @@ async function extractVideoLinksFromPage(url: string, cookies: string): Promise<
       // Skip if already found
       if (linksFound.has(href)) continue
 
-      // Get the surrounding context for thumbnail
-      const startIdx = Math.max(0, match.index - 500)
-      const endIdx = Math.min(html.length, match.index + 500)
+      // Get the surrounding context for thumbnail (expanded to 2000 chars for better size detection)
+      const startIdx = Math.max(0, match.index - 2000)
+      const endIdx = Math.min(html.length, match.index + 2000)
       const context = html.substring(startIdx, endIdx)
 
       // Extract thumbnail
       const thumbMatch = thumbnailPattern.exec(context)
       const thumbnail = thumbMatch ? thumbMatch[1] : undefined
+
+      // Extract size from context (primary method)
+      let size = parseSizeFromContext(context)
+
+      // Fallback: fetch video page to get size if not found in context
+      if (!size) {
+        const fullUrl = href.startsWith('http') ? href : `https://prehrajto.cz${href}`
+        try {
+          // Rate limiting for video page requests
+          await new Promise(resolve => setTimeout(resolve, 500))
+
+          const videoPageResponse = await axios.get(fullUrl, {
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
+              'Cookie': cookies || ''
+            },
+            timeout: 15000
+          })
+          size = parseSizeFromVideoPage(videoPageResponse.data)
+        } catch (fetchError) {
+          console.error(`Error fetching video page for size: ${fullUrl}`, fetchError.message)
+          // Continue without size if fetch fails
+        }
+      }
 
       // Build full URL
       const fullUrl = href.startsWith('http') ? href : `https://prehrajto.cz${href}`
@@ -96,9 +183,12 @@ async function extractVideoLinksFromPage(url: string, cookies: string): Promise<
       title = title.replace(/<[^>]*>/g, '').trim()
       title = title.substring(0, 100) // Limit title length
 
+      // Format title with size prefix
+      const titleWithSize = size ? `[${formatSize(size)}] - ${title}` : title
+
       linksFound.set(href, {
         url: fullUrl,
-        title,
+        title: titleWithSize,
         thumbnail
       })
     }

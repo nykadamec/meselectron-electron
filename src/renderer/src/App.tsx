@@ -183,18 +183,25 @@ function App() {
         updateVideo(progressData.videoId, videoUpdate)
 
         // Sync progress to queue item
-        const { queue, updateQueueItem: updateQueue } = useAppStore.getState()
+        const { queue, updateQueueItem } = useAppStore.getState()
         const queueItem = queue.find(item => item.video.id === progressData.videoId)
         if (queueItem) {
-          // Update queue item with progress data
-          updateQueue(queueItem.id, {
-            progress: progressData.progress,
-            speed: progressData.speed,
-            eta: progressData.eta,
-            size: progressData.size || queueItem.size,
-            subPhase: progressData.status === 'assembling' ? 'assembling' :
-                      progressData.status === 'watermarking' ? 'watermarking' : 'downloading'
-          })
+          // Only update download progress when in download phase
+          if (queueItem.phase === 'download') {
+            // Prevent progress from jumping backwards (parallel chunk downloads)
+            const currentProgress = queueItem.progress || 0
+            const newProgress = progressData.progress ?? 0
+            if (newProgress >= currentProgress || currentProgress === 0 || currentProgress === 100) {
+              updateQueueItem(queueItem.id, {
+                progress: progressData.progress,
+                speed: progressData.speed,
+                eta: progressData.eta,
+                size: progressData.size || queueItem.size,
+                subPhase: progressData.status === 'assembling' ? 'assembling' :
+                          progressData.status === 'watermarking' ? 'watermarking' : 'downloading'
+              })
+            }
+          }
         }
 
         // Handle queue completion - 2 phase system (download -> upload)
@@ -440,6 +447,7 @@ function App() {
     // Mark as active
     updateQueueItem(nextItem.id, {
       status: 'active',
+      phase: 'download',
       startedAt: new Date()
     })
 

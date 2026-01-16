@@ -44,7 +44,7 @@ const getProjectRoot = () => {
 
 // Settings handlers
 ipcMain.handle('settings:read', async () => {
-  const settingsPath = path.join(getUserDataPath(), 'PrehrajtoAutoPilot', 'settings.json')
+  const settingsPath = path.join(getUserDataPath(), 'prehrajto-autopilot', 'settings.json')
   try {
     const data = await fs.readFile(settingsPath, 'utf-8')
     return JSON.parse(data) as Settings
@@ -63,7 +63,7 @@ ipcMain.handle('settings:read', async () => {
 })
 
 ipcMain.handle('settings:write', async (_, settings: Settings) => {
-  const appPath = path.join(getUserDataPath(), 'PrehrajtoAutoPilot')
+  const appPath = path.join(getUserDataPath(), 'prehrajto-autopilot')
   await fs.mkdir(appPath, { recursive: true })
   const settingsPath = path.join(appPath, 'settings.json')
   await fs.writeFile(settingsPath, JSON.stringify(settings, null, 2))
@@ -294,10 +294,23 @@ ipcMain.handle('download:start', async (_, options: { url: string; outputPath?: 
       }
     })()
 
+    // Read current settings to get downloadMode
+    const settingsPath = path.join(getUserDataPath(), 'prehrajto-autopilot', 'settings.json')
+    let downloadMode = 'ffmpeg-chunks'
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const settingsData = require('fs').readFileSync(settingsPath, 'utf-8')
+      const settings = JSON.parse(settingsData)
+      downloadMode = settings.downloadMode || 'ffmpeg-chunks'
+    } catch {
+      // Use default
+    }
+
     const workerPayload = {
       ...options,
       outputPath,
-      ffmpegPath
+      ffmpegPath,
+      downloadMode
     }
 
     const worker = new Worker(workerPath, {

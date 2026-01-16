@@ -2,108 +2,165 @@
 
 <div align="center">
 
-[![Electron](https://img.shields.io/badge/Electron-39.2.7-47848F?style=flat-square&logo=electron)](https://electronjs.org)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.9.3-3178C6?style=flat-square&logo=typescript)](https://typescriptlang.org)
-[![React](https://img.shields.io/badge/React-19.2.3-61DAFB?style=flat-square&logo=react)](https://reactjs.org)
-[![License](https://img.shields.io/badge/License-ISC-FDAD00?style=flat-square)](LICENSE)
+<!-- Badges Row -->
+[![Electron](https://img.shields.io/badge/Electron-39.2.7-47848F?style=for-the-badge&logo=electron)](https://electronjs.org)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.9.3-3178C6?style=for-the-badge&logo=typescript)](https://typescriptlang.org)
+[![React](https://img.shields.io/badge/React-19.2.3-61DAFB?style=for-the-badge&logo=react)](https://reactjs.org)
+[![License](https://img.shields.io/badge/License-ISC-FDAD00?style=for-the-badge)](LICENSE)
+
+<br><br>
+
+<!-- ASCII Banner -->
+```
+╔══════════════════════════════════════════════════════════════════╗
+║                                                                  ║
+║     ██████╗ ██████╗ ███╗   ██╗████████╗███████╗██████╗ ██╗       ║
+║    ██╔═══██╗██╔══██╗████╗  ██║╚══██╔══╝██╔════╝██╔══██╗██║       ║
+║    ██║   ██║██████╔╝██╔██╗ ██║   ██║   █████╗  ██████╔╝██║       ║
+║    ██║   ██║██╔══██╗██║╚██╗██║   ██║   ██╔══╝  ██╔══██╗██║       ║
+║    ╚██████╔╝██║  ██║██║ ╚████║   ██║   ███████╗██║  ██║███████╗ ║
+║     ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═══╝   ╚═╝   ╚══════╝╚═╝  ╚═╝╚══════╝ ║
+║                                                                  ║
+║           ██████╗ ██████╗ ██╗   ██╗██████╗                        ║
+║          ██╔════╝██╔═══██╗██║   ██║██╔══██╗                       ║
+║          ██║     ██║   ██║██║   ██║██║  ██║                       ║
+║          ██║     ██║   ██║██║   ██║██║  ██║                       ║
+║          ╚██████╗╚██████╔╝╚██████╔╝██████╔╝                       ║
+║           ╚═════╝ ╚═════╝  ╚═════╝ ╚═════╝                        ║
+║                                                                  ║
+╚══════════════════════════════════════════════════════════════════╝
+```
 
 <br>
 
-```
-     ____           _                _ _        
-    |  _ \ _ __ ___| |__  _ __ __ _ (_) |_ ___  
-    | |_) | '__/ _ \ '_ \| '__/ _` || | __/ _ \ 
-    |  __/| | |  __/ | | | | | (_| || | || (_) |
-    |_|   |_|  \___|_| |_|_|  \__,_|/ |\__\___/ 
-                                  |__/          
-```
+### 💻 Desktop application for automated video upload
 
-### Desktop application for automated video upload
+### 🚧 !! IN DEVELOPMENT !!
 
 <br>
-
-**Progress: 4%**
-
-![Progress](https://progress-bar.dev/4/?scale=100&width=200&color=47848F&style=flat-square)
 
 </div>
 
 ---
 
-## Features
-
-| Feature | Status |
-|---------|--------|
-| Multi-account upload | ✅ |
-| Progress tracking | ✅ |
-| Queue management | ✅ |
-| Drag & drop reordering | ✅ |
-| Video discovery | ✅ |
-| Session management | ✅ |
-| Dark/Light theme | 🔄 |
-| Auto-updater | 🔄 |
-
-## Quick Start
-
-```bash
-npm install
-npm run build
-npm run dev
-```
-
-## Tech Stack
-
-```
-Electron + TypeScript ─────┬── Main process & IPC
-                           │
-React + TailwindCSS ───────┼── UI Components
-                           │
-Web Workers ───────────────┤ Background tasks
-                           │
-Playwright ────────────────┘ Browser automation
-```
-
-## Project Structure
-
-```
-src/
-├── main/       → Electron IPC handlers
-├── preload/    → Secure bridge
-├── renderer/   → React UI
-└── workers/    → Background tasks
-    ├── upload.worker.ts
-    ├── discover.worker.ts
-    └── session.worker.ts
-```
-
----
-
-## [ČESKY]
+## ✨ Features
 
 <div align="center">
 
-**Desktop aplikace pro automatické nahrávání videí**
-
-**Stav: 4%**
-
-![Stav](https://progress-bar.dev/4/?scale=100&width=200&color=47848F&style=flat-square)
+| 🎯 Multi-account upload | ✅ |
+|------------------------|----|
+| 📊 Progress tracking | ✅ |
+| 📋 Queue management | ✅ |
+| ✋ Drag & drop | ✅ |
+| 🔍 Video discovery | ✅ |
+| 🔐 Session management | ✅ |
+| 🌙 Dark/Light theme | 🔄 |
+| 🔄 Auto-updater | 🔄 |
 
 </div>
 
-### Funkce
+---
 
-| Funkce | Stav |
-|--------|------|
-| Nahrávání na více účtů | ✅ |
-| Sledování pokroku | ✅ |
-| Správa fronty | ✅ |
-| Drag & drop přesun | ✅ |
-| Objevování videí | ✅ |
-| Správa sessions | ✅ |
-| Tmavý/světlý motiv | 🔄 |
-| Automatické aktualizace | 🔄 |
+## 🚀 Quick Start
 
-### Rychlý start
+```bash
+# Install dependencies
+npm install
+
+# Build application
+npm run build
+
+# Start development
+npm run dev
+```
+
+---
+
+## 🛠️ Tech Stack
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                                                             │
+│   ┌─────────────────┐     ┌─────────────────────────────┐  │
+│   │   Electron 39   │────▶│  TypeScript 5.9            │  │
+│   └─────────────────┘     └─────────────────────────────┘  │
+│                                                             │
+│   ┌─────────────────┐     ┌─────────────────────────────┐  │
+│   │   React 19      │────▶│  TailwindCSS 4             │  │
+│   └─────────────────┘     └─────────────────────────────┘  │
+│                                                             │
+│   ┌─────────────────┐     ┌─────────────────────────────┐  │
+│   │  Web Workers    │────▶│  Background Processing     │  │
+│   └─────────────────┘     └─────────────────────────────┘  │
+│                                                             │
+│   ┌─────────────────┐     ┌─────────────────────────────┐  │
+│   │   Playwright    │────▶│  Browser Automation        │  │
+│   └─────────────────┘     └─────────────────────────────┘  │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 📁 Project Structure
+
+```
+📦 src
+├── 📂 main/          → Electron main process & IPC
+├── 📂 preload/       → Secure bridge (preload scripts)
+├── 📂 renderer/      → React UI components
+└── 📂 workers/       → Background workers
+    ├── 📄 upload.worker.ts      → CDN upload
+    ├── 📄 discover.worker.ts    → Video discovery
+    └── 📄 session.worker.ts     → Session management
+```
+
+---
+
+## 📦 Build
+
+```bash
+# macOS (Apple Silicon)
+npm run build:mac
+
+# Windows
+npm run build:win
+
+# All platforms
+npm run build:all
+```
+
+---
+
+<div align="center">
+
+### 📄 [ČESKY]
+
+</div>
+
+---
+
+<div align="center">
+
+### 💻 Desktop aplikace pro automatické nahrávání videí
+
+### 🚧 !! VE VÝVOJI !!
+
+<br>
+
+| 🎯 Nahrávání na více účtů | ✅ |
+|---------------------------|----|
+| 📊 Sledování pokroku | ✅ |
+| 📋 Správa fronty | ✅ |
+| ✋ Drag & drop | ✅ |
+| 🔍 Objevování videí | ✅ |
+| 🔐 Správa sessions | ✅ |
+| 🌙 Tmavý/světlý motiv | 🔄 |
+| 🔄 Automatické aktualizace | 🔄 |
+
+<br>
+
+### 🚀 Rychlý start
 
 ```bash
 npm install
@@ -111,14 +168,16 @@ npm run build
 npm run dev
 ```
 
-### Licence
+<br>
 
-ISC
+### 📝 Licence
+
+**ISC**
 
 ---
 
 <div align="right">
 
-_Generated with Claude Code_
+_Built with ❤️ using Claude Code_
 
 </div>

@@ -17745,15 +17745,31 @@ function App() {
               });
               const account = accounts2.find((a) => a.id === queueItem2.accountId);
               if (account && progressData.path) {
-                window.electronAPI.uploadStart({
-                  filePath: progressData.path,
-                  cookies: account.cookiesFile || void 0
+                window.electronAPI.accountsReadCookies(account.id).then((cookies) => {
+                  window.electronAPI.uploadStart({
+                    filePath: progressData.path,
+                    cookies: cookies || void 0
+                  }).catch((error) => {
+                    addLog({
+                      id: crypto.randomUUID(),
+                      timestamp: /* @__PURE__ */ new Date(),
+                      level: "error",
+                      message: `Chyba nahrávání ${queueItem2.video.title}: ${error}`,
+                      source: "upload"
+                    });
+                    updateQueueItem2(queueItem2.id, {
+                      status: "failed",
+                      error: String(error),
+                      completedAt: /* @__PURE__ */ new Date()
+                    });
+                    processQueue();
+                  });
                 }).catch((error) => {
                   addLog({
                     id: crypto.randomUUID(),
                     timestamp: /* @__PURE__ */ new Date(),
                     level: "error",
-                    message: `Chyba nahrávání ${queueItem2.video.title}: ${error}`,
+                    message: `Chyba čtení cookies: ${error}`,
                     source: "upload"
                   });
                   updateQueueItem2(queueItem2.id, {

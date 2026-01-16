@@ -88,6 +88,8 @@ ipcMain.handle('accounts:list', async () => {
 
       // Parse cookies
       let cookieHeader = ''
+      let cookieCount = 0
+      let cookieNames: string[] = []
       try {
         const cookiesData = await fs.readFile(cookiesPath, 'utf-8')
         const cookies: string[] = []
@@ -98,10 +100,14 @@ ipcMain.handle('accounts:list', async () => {
           const cookiePart = trimmed.split(';')[0]
           if (cookiePart && cookiePart.includes('=')) {
             cookies.push(cookiePart)
+            cookieNames.push(cookiePart.split('=')[0])
           }
         }
+        cookieCount = cookies.length
         cookieHeader = cookies.join('; ')
-      } catch {
+        console.log(`[IPC] ${file}: ${cookieCount} cookies načteno: ${cookieNames.slice(0, 5).join(', ')}${cookieNames.length > 5 ? '...' : ''}`)
+      } catch (err) {
+        console.error(`[IPC] ${file}: Chyba čtení cookies: ${err}`)
         cookieHeader = ''
       }
 
@@ -158,9 +164,24 @@ ipcMain.handle('accounts:read-cookies', async (_, accountId: string) => {
     if (!account) return null
 
     const cookiesPath = path.join(accountsPath, account)
-    const data = await fs.readFile(cookiesPath, 'utf-8')
-    return data
-  } catch {
+    const cookiesData = await fs.readFile(cookiesPath, 'utf-8')
+
+    // Parse cookies from Netscape format
+    const cookies: string[] = []
+    const lines = cookiesData.trim().split('\n')
+    for (const line of lines) {
+      const trimmed = line.trim()
+      if (!trimmed || trimmed.startsWith('#')) continue
+      const cookiePart = trimmed.split(';')[0]  // Pouze "name=value", bez atributů
+      if (cookiePart && cookiePart.includes('=')) {
+        cookies.push(cookiePart)
+      }
+    }
+    const cookieHeader = cookies.join('; ')
+    console.log(`[IPC] accounts:read-cookies: ${cookies.length} cookies parsed`)
+    return cookieHeader
+  } catch (err) {
+    console.error(`[IPC] accounts:read-cookies error: ${err}`)
     return null
   }
 })

@@ -237,17 +237,34 @@ function App() {
               // Start upload
               const account = accounts.find(a => a.id === queueItem.accountId)
               if (account && progressData.path) {
-                window.electronAPI.uploadStart({
-                  filePath: progressData.path,
-                  cookies: account.cookiesFile || undefined
+                // Read cookies from file first (FIX: was using cookiesFile path instead of actual cookies)
+                window.electronAPI.accountsReadCookies(account.id).then((cookies) => {
+                  window.electronAPI.uploadStart({
+                    filePath: progressData.path,
+                    cookies: cookies || undefined
+                  }).catch((error) => {
+                    addLog({
+                      id: crypto.randomUUID(),
+                      timestamp: new Date(),
+                      level: 'error',
+                      message: `Chyba nahrávání ${queueItem.video.title}: ${error}`,
+                      source: 'upload'
+                    })
+                    updateQueueItem(queueItem.id, {
+                      status: 'failed',
+                      error: String(error),
+                      completedAt: new Date()
+                    })
+                    processQueue()
+                  })
                 }).catch((error) => {
                   addLog({
                     id: crypto.randomUUID(),
-                    timestamp: new Date(),
-                    level: 'error',
-                    message: `Chyba nahrávání ${queueItem.video.title}: ${error}`,
-                    source: 'upload'
-                  })
+                      timestamp: new Date(),
+                      level: 'error',
+                      message: `Chyba čtení cookies: ${error}`,
+                      source: 'upload'
+                    })
                   updateQueueItem(queueItem.id, {
                     status: 'failed',
                     error: String(error),

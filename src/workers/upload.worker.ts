@@ -1,6 +1,6 @@
 // Upload worker - handles video uploads to CDN with progress reporting
 import { parentPort, workerData } from 'worker_threads'
-import axios from 'axios'
+import axios, { AxiosInstance } from 'axios'
 import fs from 'fs'
 import path from 'path'
 import https from 'https'
@@ -12,7 +12,33 @@ const CDN_URLS = [
   'https://premiumcdn.net/upload',       // Fallback URL (no 'api.' prefix)
 ] as const
 
-type CDNUrl = typeof CDN_URLS[number]
+/**
+ * Create axios session with cookies (matching Python requests.Session pattern)
+ */
+function createUploadSession(cookies: string): AxiosInstance {
+  return axios.create({
+    baseURL: 'https://prehrajto.cz',
+    headers: {
+      'Cookie': cookies,
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36',
+      'Accept': '*/*',
+      'Accept-Language': 'cs-CZ,cs;q=0.9,en;q=0.8',
+      'Accept-Encoding': 'gzip, deflate, br',
+      'Origin': 'https://prehrajto.cz',
+      'Referer': 'https://prehrajto.cz/',
+      'Upgrade-Insecure-Requests': '1',
+      'Sec-Fetch-Site': 'same-origin',
+      'Sec-Fetch-Mode': 'cors',
+      'Sec-Fetch-Dest': 'empty',
+      'sec-ch-ua': '"Google Chrome";v="141", "Not?A_Brand";v="8", "Chromium";v="141"',
+      'sec-ch-ua-mobile': '?0',
+      'sec-ch-ua-platform': '"Windows"',
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+    validateStatus: status => status < 500, // Accept 3xx without following redirect
+    withCredentials: true, // Send cookies for cross-origin requests
+  })
+}
 
 // Helper to safely post messages (parentPort is always available in worker threads)
 function postMessage(data: unknown) {
@@ -168,10 +194,12 @@ function buildMultipartForm(
   return { preamble, closing, contentLength }
 }
 
-async function getUploadParameters(cookies: string, filePath: string): Promise<UploadParams | null> {
+async function getUploadParameters(session: AxiosInstance, filePath: string): Promise<UploadParams | null> {
   try {
     const fileSize = fs.statSync(filePath).size
     const fileName = path.basename(filePath).replace(/\.(avi|mp4|mkv)$/i, '')
+
+    console.log(`[UPLOAD] getUploadParameters: fileSize=${fileSize}, fileName=${fileName}`)
 
     const formData = new URLSearchParams()
     formData.append('do', 'prepareVideo')
@@ -183,28 +211,45 @@ async function getUploadParameters(cookies: string, filePath: string): Promise<U
     formData.append('folder', '')
     formData.append('private', 'false')
 
-    const response = await axios.post(
-      'https://prehrajto.cz/profil/nahrat-soubor?do=prepareVideo',
-      formData,
-      {
-        headers: {
-          'Cookie': cookies,
-          'Content-Type': 'application/x-www-form-urlencoded',
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36',
-          'Accept': '*/*',
-          'Accept-Language': 'cs-CZ,cs;q=0.9,en;q=0.8',
-          'Origin': 'https://prehrajto.cz',
-          'Referer': 'https://prehrajto.cz/profil/nahrat-soubor'
-        }
-      }
+    // Use axios session (thread-local session pattern from Python)
+    const response = await session.post(
+      '/profil/nahrat-soubor?do=prepareVideo',
+      formData
     )
 
-    if (response.status === 200 && response.data) {
-      postMessage({ type: 'status', status: 'getting_params', message: 'Získávám upload parametry...' })
-      return response.data as UploadParams
+    // Log Content-Type for debugging (helps identify HTML vs JSON responses)
+    const contentType = response.headers['content-type']
+    console.log(`[UPLOAD] getUploadParameters response: status=${response.status}, Content-Type=${contentType}`)
+
+    // Check Content-Type to detect HTML (login page) vs JSON (actual response)
+    if (!contentType?.includes('application/json')) {
+      console.error(`[UPLOAD] Server vrátil ${contentType || 'neznámý typ'} místo JSON - pravděpodobně vyžaduje přihlášení`)
+      console.error(`[UPLOAD] Obsah odpovědi: ${String(response.data).substring(0, 300)}`)
+      console.error('[UPLOAD] Zkontrolujte platnost cookies a přihlaste se znovu na prehrajto.cz')
+      return null
     }
 
-    console.error('[UPLOAD] Failed to get upload params:', response.status, response.data)
+    // Safely parse JSON response (handles both string and object)
+    let data: unknown
+    try {
+      data = typeof response.data === 'string' ? JSON.parse(response.data) : response.data
+    } catch (parseError) {
+      console.error(`[UPLOAD] Nepodařilo se parsovat JSON: ${parseError}`)
+      return null
+    }
+
+    // Check for upload params in response
+    if (response.status === 200 && data && typeof data === 'object' && 'response' in data && 'project' in data) {
+      postMessage({ type: 'status', status: 'getting_params', message: 'Získávám upload parametry...' })
+      return data as UploadParams
+    }
+
+    // Check for redirect in response
+    if (data && typeof data === 'object' && 'redirect' in data) {
+      console.log(`[UPLOAD] Server returned redirect URL: ${(data as { redirect: string }).redirect}`)
+    }
+
+    console.error(`[UPLOAD] Failed to get upload params: status=${response.status}, data=${JSON.stringify(data).substring(0, 200)}`)
     return null
   } catch (error) {
     console.error('[UPLOAD] Error getting upload params:', error instanceof Error ? error.message : error)
@@ -410,12 +455,21 @@ async function uploadVideo(options: { filePath: string; cookies?: string }) {
       throw new Error('No cookies provided - please log in first')
     }
 
+    // Log cookie info (without sensitive values)
+    const cookieNames = cookies.split(';').map(c => c.trim().split('=')[0])
+    console.log(`[UPLOAD] Cookies received: ${cookieNames.length} cookies, keys: ${cookieNames.join(', ')}`)
+    const hasAccessToken = cookieNames.includes('access_token')
+    const hasRefreshToken = cookieNames.includes('refresh_token')
+    const hasNss = cookieNames.includes('_nss')
+    console.log(`[UPLOAD] Cookie validation: access_token=${hasAccessToken}, refresh_token=${hasRefreshToken}, _nss=${hasNss}`)
+
     console.log(`[UPLOAD] Starting upload: ${path.basename(filePath)} (${fileSize} bytes)`)
 
-    // Step 1: Get upload parameters from prehrajto.cz
+    // Step 1: Create session and get upload parameters from prehrajto.cz
     postMessage({ type: 'status', status: 'getting_params', message: 'Získávám upload parametry...' })
 
-    const uploadParams = await getUploadParameters(cookies, filePath)
+    const session = createUploadSession(cookies)
+    const uploadParams = await getUploadParameters(session, filePath)
     if (!uploadParams) {
       throw new Error('Failed to get upload parameters')
     }

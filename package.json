@@ -1,6 +1,6 @@
 {
   "name": "prehrajto-autopilot",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Prehraj.to AutoPilot - Desktop application for video management",
   "main": "dist/main/index.js",
   "appName": "Prehraj.to AutoPilot",
@@ -33,6 +33,8 @@
     "electron-updater": "^6.7.3",
     "fluent-ffmpeg": "^2.1.3",
     "lucide-react": "^0.562.0",
+    "playwright": "^1.57.0",
+    "puppeteer": "^24.35.0",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
     "zustand": "^5.0.10"

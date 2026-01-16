@@ -16,6 +16,13 @@ interface VideoCandidate {
   thumbnail?: string
 }
 
+interface DiscoverOptions {
+  accountId: string
+  count: number
+  cookies?: string  // Backwards compatibility
+  videoId?: string
+}
+
 /**
  * Parse Set-Cookie format to cookie header string
  * Format: name=value; Domain=...; Path=...; Secure; HttpOnly
@@ -45,23 +52,6 @@ function parseCookieFile(content: string): string {
 function parseSizeFromContext(context: string): string | null {
   const sizePattern = /<div[^>]*class="video__tag video__tag--size"[^>]*>([^<]+)<\/div>/i
   const match = context.match(sizePattern)
-  if (match && match[1]) {
-    return match[1].trim() // "1.37 GB"
-  }
-  return null
-}
-
-/**
- * Parse file size from individual video page
- * Looks for:
- * <li>
- *     <span class="color-primary">Velikost:</span>
- *     <span>1.37 GB</span>
- * </li>
- */
-function parseSizeFromVideoPage(html: string): string | null {
-  const sizePattern = /<span[^>]*class="color-primary"[^>]*>Velikost:<\/span>\s*<span>([^<]+)<\/span>/i
-  const match = html.match(sizePattern)
   if (match && match[1]) {
     return match[1].trim() // "1.37 GB"
   }
@@ -109,94 +99,93 @@ async function extractVideoLinksFromPage(url: string, cookies: string): Promise<
   try {
     const response = await axios.get(url, {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        'Accept-Language': 'cs-CZ,cs;q=0.9,en;q=0.8',
+        'Accept-Encoding': 'gzip, deflate, br',
+        'Connection': 'keep-alive',
+        'Upgrade-Insecure-Requests': '1',
+        'Origin': 'https://prehrajto.cz',
+        'Referer': 'https://prehrajto.cz/',
+        'Sec-Fetch-Site': 'same-origin',
+        'Sec-Fetch-Mode': 'navigate',
+        'Sec-Fetch-Dest': 'document',
         'Cookie': cookies || ''
       },
       timeout: 15000
     })
 
     const html = response.data
-    const videoCandidates: VideoCandidate[] = []
 
-    // Parse HTML using regex (similar to Python BeautifulSoup)
-    // Looking for: <a class="video video--small video--link" href="/video/xxx">
-    const linkPattern = /<a[^>]*class="video[^"]*video--small[^"]*video--link"[^>]*href="([^"]*)"[^>]*>/gi
-    const thumbnailPattern = /<img[^>]*src="([^"]*)"[^>]*>/i
+    // Debug logging
+    console.log(`[DEBUG] Response status: ${response.status}`)
+    console.log(`[DEBUG] HTML length: ${html.length} chars`)
+    console.log(`[DEBUG] HTML sample: ${html.substring(0, 800)}`)
+
+    // Check if we got a login page or error page
+    // Only treat as login page if we're actually on /prihlaseni or similar, not just because "přihlásit" appears in nav
+    if (response.status !== 200) {
+      console.error(`[DEBUG] Got error status: ${response.status}`)
+      return []
+    }
+
+    // Check for actual login page (form with email/password)
+    const isLoginPage = url.includes('/prihlaseni') || url.includes('/registrace')
+    if (isLoginPage && (html.includes('frm-login-loginForm') || html.includes('type="password"'))) {
+      console.error(`[DEBUG] Got login page`)
+      return []
+    }
+
+    // Video links pattern: href="/video-title/ID" (format: /slug/hex-id)
+    const linkPattern = /href="\/([^\/]+)\/([a-f0-9]+)"[^>]*>/gi
 
     let match
     const linksFound = new Map<string, VideoCandidate>()
 
     while ((match = linkPattern.exec(html)) !== null) {
-      const href = match[1]
-      // Skip if already found
-      if (linksFound.has(href)) continue
+      const title = match[1]  // video title/slug
+      const videoId = match[2]  // hex ID
+      const href = `/${title}/${videoId}`
 
-      // Get the surrounding context for thumbnail (expanded to 2000 chars for better size detection)
-      const startIdx = Math.max(0, match.index - 2000)
-      const endIdx = Math.min(html.length, match.index + 2000)
+      // Skip if already found or if it looks like a different type of link
+      if (linksFound.has(href)) continue
+      if (title === 'video' || title === 'profil' || title === 'genre' || title === 'category') continue
+
+      // Get the surrounding context for thumbnail
+      const startIdx = Math.max(0, match.index - 1500)
+      const endIdx = Math.min(html.length, match.index + 1500)
       const context = html.substring(startIdx, endIdx)
 
-      // Extract thumbnail
-      const thumbMatch = thumbnailPattern.exec(context)
+      // Extract thumbnail - look for thumb.prehrajto.cz
+      const thumbMatch = context.match(/src="([^"]*thumb\.prehrajto\.cz[^"]*)"/i)
       const thumbnail = thumbMatch ? thumbMatch[1] : undefined
 
-      // Extract size from context (primary method)
+      // Extract size from context
       let size = parseSizeFromContext(context)
 
-      // Fallback: fetch video page to get size if not found in context
-      if (!size) {
-        const fullUrl = href.startsWith('http') ? href : `https://prehrajto.cz${href}`
-        try {
-          // Rate limiting for video page requests
-          await new Promise(resolve => setTimeout(resolve, 500))
-
-          const videoPageResponse = await axios.get(fullUrl, {
-            headers: {
-              'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
-              'Cookie': cookies || ''
-            },
-            timeout: 15000
-          })
-          size = parseSizeFromVideoPage(videoPageResponse.data)
-        } catch (fetchError) {
-          console.error(`Error fetching video page for size: ${fullUrl}`, fetchError.message)
-          // Continue without size if fetch fails
-        }
-      }
-
       // Build full URL
-      const fullUrl = href.startsWith('http') ? href : `https://prehrajto.cz${href}`
+      const fullUrl = `https://prehrajto.cz${href}`
 
-      // Extract title from URL (like Python implementation)
-      // Format: https://prehrajto.cz/video-name/ID
-      let title = fullUrl
-      if (fullUrl.includes('prehrajto.cz/')) {
-        const path = fullUrl.split('prehrajto.cz/')[1]
-        if (path.includes('/')) {
-          title = path.split('/')[0]
-        } else {
-          title = path
-        }
-      }
-
-      // Clean up title
-      title = title.replace(/<[^>]*>/g, '').trim()
-      title = title.substring(0, 100) // Limit title length
+      // Clean up title (replace hyphens with spaces, capitalize)
+      const cleanTitle = title.replace(/-/g, ' ').replace(/\s+/g, ' ').trim()
+      const formattedTitle = cleanTitle.charAt(0).toUpperCase() + cleanTitle.slice(1)
 
       // Format title with size prefix
-      const titleWithSize = size ? `[${formatSize(size)}] - ${title}` : title
+      const titleWithSize = size ? `[${formatSize(size)}] - ${formattedTitle}` : formattedTitle
 
       linksFound.set(href, {
         url: fullUrl,
         title: titleWithSize,
-        thumbnail
+        thumbnail: thumbnail?.startsWith('//') ? `https:${thumbnail}` : thumbnail
       })
     }
 
+    console.log(`[DEBUG] Found ${linksFound.size} video links`)
     return Array.from(linksFound.values())
 
   } catch (error) {
-    console.error(`Error extracting links from ${url}:`, error.message)
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    console.error(`Error extracting links from ${url}:`, errorMessage)
     return []
   }
 }
@@ -205,10 +194,16 @@ async function extractVideoLinksFromPage(url: string, cookies: string): Promise<
  * Main discovery function - scrapes multiple pages to find video candidates
  * Matches Python implementation in message.py:main() -> download_videos_for_admin_with_gui()
  */
-async function discoverVideos(options: { cookies: string; count: number; videoId?: string }) {
-  // Parse cookies from Set-Cookie format to Cookie header format
-  const parsedCookies = parseCookieFile(options.cookies || '')
-  const { cookies, count } = { cookies: parsedCookies, count: options.count }
+async function discoverVideos(options: DiscoverOptions) {
+  // Get cookies - already retrieved from session worker via IPC handler
+  const cookies = options.cookies || ''
+
+  // Parse cookies from Netscape format if needed (detect by #HttpOnly_ or Domain= prefix)
+  const validCookies = cookies.includes('#HttpOnly_') || cookies.includes('Domain=')
+    ? parseCookieFile(cookies)
+    : cookies
+
+  const { count } = { count: options.count }
   const videoCandidates: VideoCandidate[] = []
   const seenUrls = new Set<string>()
   const BUFFER_MULTIPLIER = 3 // Get 3x more candidates to account for size filtering
@@ -239,7 +234,9 @@ async function discoverVideos(options: { cookies: string; count: number; videoId
         break
       }
 
-      const url = `${config.baseUrl}&currentViewingVideoListing-visualPaginator-page=${page}`
+      // Build URL - use ? for first param, & for additional params
+      const separator = config.baseUrl.includes('?') ? '&' : '?'
+      const url = `${config.baseUrl}${separator}currentViewingVideoListing-visualPaginator-page=${page}`
       totalScanned++
 
       sendProgress({
@@ -255,8 +252,11 @@ async function discoverVideos(options: { cookies: string; count: number; videoId
       // Rate limiting - same as Python (0.5s between requests)
       await new Promise(resolve => setTimeout(resolve, 500))
 
+      // Debug logging for URL structure
+      console.log(`[DEBUG] Fetching: ${url}`)
+
       // Extract links from this page
-      const pageLinks = await extractVideoLinksFromPage(url, cookies)
+      const pageLinks = await extractVideoLinksFromPage(url, validCookies)
 
       // Filter out duplicates and add to results
       for (const link of pageLinks) {

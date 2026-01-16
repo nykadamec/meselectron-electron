@@ -266,7 +266,8 @@ function App() {
                 window.electronAPI.accountsReadCookies(account.id).then((cookies) => {
                   window.electronAPI.uploadStart({
                     filePath: progressData.path,
-                    cookies: cookies || undefined
+                    cookies: cookies || undefined,
+                    videoId: queueItem.video.id
                   }).catch((error) => {
                     addLog({
                       id: crypto.randomUUID(),
@@ -368,8 +369,13 @@ function App() {
 
       // Handle upload completion
       if (progressData.type === 'complete') {
-        const { updateQueueItem } = useAppStore.getState()
+        const { updateQueueItem, queue } = useAppStore.getState()
+        console.log('[UI] complete received:', {
+          videoId: progressData.videoId,
+          queueVideoIds: queue.map(q => q.video.id)
+        })
         const uploadItem = findUploadItem()
+        console.log('[UI] findUploadItem result:', uploadItem ? uploadItem.video.id : 'NOT FOUND')
         if (uploadItem) {
           if (progressData.error) {
             updateQueueItem(uploadItem.id, {

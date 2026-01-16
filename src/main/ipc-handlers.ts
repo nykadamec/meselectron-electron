@@ -842,6 +842,11 @@ ipcMain.handle('download:extract-metadata', async (_, { url, cookies }) => {
 
 // Upload handler using worker
 ipcMain.handle('upload:start', async (_, options: { filePath: string; accountId?: string; cookies?: string; videoId?: string }) => {
+  console.log('[IPC] uploadStart called:', {
+    videoId: options.videoId,
+    filePath: options.filePath?.substring(0, 50)
+  })
+
   // Get cookies from session worker if accountId is provided
   let cookies = options.cookies || ''
 

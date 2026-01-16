@@ -424,6 +424,7 @@ async function uploadToCDN(
 
 async function uploadVideo(options: UploadOptions) {
   const { filePath, cookies, videoId } = options
+  console.log('[UPLOAD] uploadVideo called with videoId:', videoId)
 
   try {
     postMessage({ type: 'status', status: 'starting', videoId })
@@ -490,6 +491,7 @@ async function uploadVideo(options: UploadOptions) {
       throw new Error('Failed to upload to CDN after 5 attempts')
     }
 
+    console.log('[UPLOAD] Sending complete with videoId:', videoId)
     postMessage({ type: 'status', status: 'completed', videoId })
     postMessage({ type: 'complete', success: true, videoId })
 

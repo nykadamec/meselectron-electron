@@ -140,6 +140,7 @@ function SortableQueueItem({
                   {item.phase === 'upload' ? '↑ Nahrávání' :
                    item.subPhase === 'assembling' ? '↓ Compiling chunks' :
                    '↓ Stahování'}
+                  [{((item.phase === 'upload' ? item.uploadProgress : item.progress) || 0).toFixed(2)}%]
                 </span>
               </div>
 

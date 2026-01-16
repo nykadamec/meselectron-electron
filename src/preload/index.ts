@@ -17,6 +17,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   accountsGetCredits: function(accountId) {
     return ipcRenderer.invoke('accounts:get-credits', accountId)
   },
+  accountsAutoLogin: function() {
+    return ipcRenderer.invoke('accounts:auto-login')
+  },
   filesSelectUpload: function() {
     return ipcRenderer.invoke('files:select-upload')
   },

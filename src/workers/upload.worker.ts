@@ -5,12 +5,29 @@ import fs from 'fs'
 import path from 'path'
 import https from 'https'
 import http from 'http'
+import yaml from 'js-yaml'
 
-// CDN URLs with fallback (matching Python upload.py pattern)
-const CDN_URLS = [
-  'https://api.premiumcdn.net/upload',  // Primary URL
-  'https://premiumcdn.net/upload',       // Fallback URL (no 'api.' prefix)
-] as const
+// CDN URL from app.yaml config
+const CDN_URL = 'https://api.premiumcdn.net/upload'
+
+/**
+ * Load configuration from app.yaml
+ */
+function loadConfig(): { MAX_SSL_CHUNK_SIZE: number } {
+  try {
+    const appYamlPath = path.resolve(process.cwd(), 'app.yaml')
+    const appYamlContent = fs.readFileSync(appYamlPath, 'utf-8')
+    const appConfig = yaml.load(appYamlContent) as { config?: { MAX_SSL_CHUNK_SIZE?: number } }
+    return {
+      MAX_SSL_CHUNK_SIZE: appConfig.config?.MAX_SSL_CHUNK_SIZE || 8 * 1024  // Default 8KB
+    }
+  } catch (error) {
+    console.warn('[UPLOAD] Failed to load app.yaml config, using defaults')
+    return { MAX_SSL_CHUNK_SIZE: 8 * 1024 }
+  }
+}
+
+const config = loadConfig()
 
 /**
  * Create axios session with cookies (matching Python requests.Session pattern)
@@ -45,6 +62,13 @@ function postMessage(data: unknown) {
   if (parentPort) {
     parentPort.postMessage(data)
   }
+}
+
+interface UploadOptions {
+  filePath: string
+  accountId?: string  // New: get cookies from session worker
+  cookies?: string    // Backwards compatibility
+  videoId?: string    // For real-time progress tracking
 }
 
 interface UploadParams {
@@ -266,182 +290,143 @@ async function uploadToCDN(
   const fileSize = fs.statSync(filePath).size
   const fileName = path.basename(filePath)
 
-  // Try each CDN URL in order (with fallback)
-  for (let urlIndex = 0; urlIndex < CDN_URLS.length; urlIndex++) {
-    const cdnUrlStr = CDN_URLS[urlIndex as number]
-    const isFallback = urlIndex > 0
+  // Create boundary
+  const boundary = '----WebKitFormBoundary' + crypto.randomUUID().replace(/-/g, '')
 
-    if (isFallback) {
-      console.log(`[UPLOAD] Trying fallback URL: ${cdnUrlStr}`)
-    }
+  // Build multipart form
+  const { preamble, closing, contentLength } = buildMultipartForm(
+    boundary,
+    fileName,
+    fileSize,
+    uploadParams
+  )
 
-    // Create boundary
-    const boundary = '----WebKitFormBoundary' + crypto.randomUUID().replace(/-/g, '')
+  const cdnUrl = new URL(CDN_URL)
+  const protocol = cdnUrl.protocol === 'https:' ? https : http
 
-    // Build multipart form
-    const { preamble, closing, contentLength } = buildMultipartForm(
-      boundary,
-      fileName,
-      fileSize,
-      uploadParams
-    )
-
-    const cdnUrl = new URL(cdnUrlStr)
-    const protocol = cdnUrl.protocol === 'https:' ? https : http
-
-    const options: http.RequestOptions = {
-      hostname: cdnUrl.hostname,
-      port: cdnUrl.port || 443,
-      path: cdnUrl.pathname,
-      method: 'POST',
-      headers: {
-        'Content-Type': `multipart/form-data; boundary=${boundary}`,
-        'Content-Length': String(contentLength),
-        'Cookie': cookies,
-        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36',
-        'Accept': '*/*',
-        'Accept-Language': 'en-US,en;q=0.9,cs;q=0.8',
-        'Origin': 'https://prehrajto.cz',
-        'Referer': 'https://prehrajto.cz/',
-        'X-Requested-With': 'XMLHttpRequest',
-        'Connection': 'keep-alive',
-        'DNT': '1',
-        'sec-ch-ua': '"Google Chrome";v="143", "Chromium";v="143", "Not?A_Brand";v="24"',
-        'sec-ch-ua-mobile': '?0',
-        'sec-ch-ua-platform': '"macOS"',
-        'Sec-Fetch-Dest': 'empty',
-        'Sec-Fetch-Mode': 'cors',
-        'Sec-Fetch-Site': 'cross-site',
-      }
-    }
-
-    console.log(`[UPLOAD] CDN URL: ${cdnUrl.href} (Content-Length=${contentLength})`)
-
-    try {
-      const result = await new Promise<boolean>((resolve) => {
-        const req = protocol.request(options, (res) => {
-          let body = ''
-          res.on('data', (chunk) => { body += chunk })
-          res.on('end', () => {
-            console.log(`[UPLOAD] CDN response: ${res.statusCode}`)
-            if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
-              console.log('[UPLOAD] File uploaded successfully to CDN')
-              resolve(true)
-            } else {
-              console.error('[UPLOAD] CDN error:', res.statusCode, body.substring(0, 200))
-              resolve(false)
-            }
-          })
-        })
-
-        req.on('error', (e) => {
-          console.error('[UPLOAD] Request error:', e)
-          resolve(false)
-        })
-
-        // Send preamble first
-        req.write(preamble)
-
-        // Stream file with ChunkedFileReader (async IIFE)
-        const reader = new ChunkedFileReader(filePath, 2 * 1024 * 1024, false)
-        let streamError: Error | null = null
-
-        let bytesSent = 0
-        let lastTime = Date.now()
-        let lastBytes = 0
-        let lastSpeed = 0
-
-        // Use IIFE pattern for streaming (synchronous reader)
-        ;(() => {
-          try {
-            reader.open()
-
-            const sendChunk = () => {
-              if (streamError) {
-                req.destroy()
-                resolve(false)
-                return
-              }
-
-              const chunk = reader.read()
-              if (!chunk) {
-                // Send closing boundary
-                req.write(closing)
-                req.end()
-                reader.close()
-                return
-              }
-
-              req.write(chunk)
-              bytesSent += chunk.length
-
-              // Calculate progress
-              const progress = Math.round((bytesSent / fileSize) * 100)
-
-              // Calculate smoothed speed
-              const now = Date.now()
-              const timeDiff = (now - lastTime) / 1000
-
-              if (timeDiff >= 0.5) {
-                const bytesDiff = bytesSent - lastBytes
-                const speedBytesPerSec = bytesDiff / timeDiff
-                const newSpeedMBps = speedBytesPerSec / (1024 * 1024)
-                lastSpeed = calculateSmoothedSpeed(lastSpeed, newSpeedMBps)
-                lastBytes = bytesSent
-                lastTime = now
-              }
-
-              onProgress(progress, bytesSent, fileSize, lastSpeed)
-
-              // Continue reading
-              sendChunk()
-            }
-
-            sendChunk()
-          } catch (e) {
-            console.error('[UPLOAD] File stream error:', e)
-            streamError = e instanceof Error ? e : new Error(String(e))
-            req.destroy()
-            resolve(false)
-          }
-        })()
-      })
-
-      if (result) {
-        return true
-      }
-
-      // If this URL failed and it's not the last one, try the next
-      if (urlIndex < CDN_URLS.length - 1) {
-        console.log(`[UPLOAD] Waiting 1s before trying fallback URL...`)
-        await new Promise(resolve => setTimeout(resolve, 1000))
-        continue
-      }
-
-      return false
-
-    } catch (error) {
-      console.error(`[UPLOAD] Error with URL ${cdnUrlStr}:`, error instanceof Error ? error.message : error)
-
-      // Try fallback URL
-      if (urlIndex < CDN_URLS.length - 1) {
-        console.log(`[UPLOAD] Waiting 1s before trying fallback URL...`)
-        await new Promise(resolve => setTimeout(resolve, 1000))
-        continue
-      }
-
-      return false
+  const options: http.RequestOptions = {
+    hostname: cdnUrl.hostname,
+    port: cdnUrl.port || 443,
+    path: cdnUrl.pathname,
+    method: 'POST',
+    headers: {
+      'Content-Type': `multipart/form-data; boundary=${boundary}`,
+      'Content-Length': String(contentLength),
+      'Cookie': cookies,
+      'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36',
+      'Accept': '*/*',
+      'Accept-Language': 'en-US,en;q=0.9,cs;q=0.8',
+      'Origin': 'https://prehrajto.cz',
+      'Referer': 'https://prehrajto.cz/',
+      'X-Requested-With': 'XMLHttpRequest',
+      'Connection': 'keep-alive',
+      'DNT': '1',
+      'sec-ch-ua': '"Google Chrome";v="143", "Chromium";v="143", "Not?A_Brand";v="24"',
+      'sec-ch-ua-mobile': '?0',
+      'sec-ch-ua-platform': '"macOS"',
+      'Sec-Fetch-Dest': 'empty',
+      'Sec-Fetch-Mode': 'cors',
+      'Sec-Fetch-Site': 'cross-site',
     }
   }
 
-  return false
-}
-
-async function uploadVideo(options: { filePath: string; cookies?: string }) {
-  const { filePath, cookies } = options
+  console.log(`[UPLOAD] CDN URL: ${cdnUrl.href} (Content-Length=${contentLength})`)
 
   try {
-    postMessage({ type: 'status', status: 'starting' })
+    // Promise resolver for upload completion (declared BEFORE callbacks)
+    let uploadResolve: ((success: boolean) => void) | undefined
+
+    // Create the HTTP request
+    const req = protocol.request(options, (res) => {
+      let body = ''
+      res.on('data', (chunk) => { body += chunk })
+      res.on('end', () => {
+        console.log(`[UPLOAD] CDN response: ${res.statusCode}`)
+        if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
+          console.log('[UPLOAD] File uploaded successfully to CDN')
+          uploadResolve?.(true)
+        } else {
+          console.error('[UPLOAD] CDN error:', res.statusCode, body.substring(0, 200))
+          uploadResolve?.(false)
+        }
+      })
+    })
+
+    req.on('error', (e) => {
+      console.error('[UPLOAD] Request error:', e)
+      uploadResolve?.(false)
+    })
+
+    // Write preamble FIRST (before file data)
+    req.write(preamble)
+
+    // Stream file with ChunkedFileReader (configurable SSL chunk size from app.yaml)
+    const reader = new ChunkedFileReader(filePath, config.MAX_SSL_CHUNK_SIZE, false)
+    let bytesSent = 0
+    let lastTime = Date.now()
+    let lastBytes = 0
+    let lastSpeedBps = 0  // Store speed in B/s for onProgress
+
+    // Async function to stream file chunks with proper drain handling
+    const sendChunk = async (): Promise<boolean> => {
+      const chunk = reader.read()
+
+      if (!chunk) {
+        // Send closing boundary
+        req.write(closing)
+        req.end()
+        reader.close()
+        return true
+      }
+
+      // Wait for buffer to drain if full
+      while (!req.write(chunk)) {
+        await new Promise(resolve => req.once('drain', resolve))
+      }
+
+      bytesSent += chunk.length
+
+      // Calculate progress
+      const progress = Math.round((bytesSent / fileSize) * 100)
+
+      // Calculate smoothed speed in B/s
+      const now = Date.now()
+      const timeDiff = (now - lastTime) / 1000
+
+      if (timeDiff >= 0.5) {
+        const bytesDiff = bytesSent - lastBytes
+        const currentSpeedBps = bytesDiff / timeDiff
+        lastSpeedBps = calculateSmoothedSpeed(lastSpeedBps, currentSpeedBps)
+        lastBytes = bytesSent
+        lastTime = now
+      }
+
+      onProgress(progress, bytesSent, fileSize, lastSpeedBps)
+
+      // Continue with next chunk
+      return sendChunk()
+    }
+
+    // Open reader and start streaming
+    reader.open()
+    await sendChunk()
+
+    // Wait for response
+    return await new Promise<boolean>((resolve) => {
+      uploadResolve = resolve
+    })
+
+  } catch (error) {
+    console.error(`[UPLOAD] Error with CDN URL:`, error instanceof Error ? error.message : error)
+    return false
+  }
+}
+
+async function uploadVideo(options: UploadOptions) {
+  const { filePath, cookies, videoId } = options
+
+  try {
+    postMessage({ type: 'status', status: 'starting', videoId })
 
     // Check if file exists
     if (!fs.existsSync(filePath)) {
@@ -466,7 +451,7 @@ async function uploadVideo(options: { filePath: string; cookies?: string }) {
     console.log(`[UPLOAD] Starting upload: ${path.basename(filePath)} (${fileSize} bytes)`)
 
     // Step 1: Create session and get upload parameters from prehrajto.cz
-    postMessage({ type: 'status', status: 'getting_params', message: 'Získávám upload parametry...' })
+    postMessage({ type: 'status', status: 'getting_params', message: 'Získávám upload parametry...', videoId })
 
     const session = createUploadSession(cookies)
     const uploadParams = await getUploadParameters(session, filePath)
@@ -475,7 +460,7 @@ async function uploadVideo(options: { filePath: string; cookies?: string }) {
     }
 
     // Step 2: Upload to CDN
-    postMessage({ type: 'status', status: 'uploading', message: 'Nahrávám na CDN...' })
+    postMessage({ type: 'status', status: 'uploading', message: 'Nahrávám na CDN...', videoId })
 
     let uploadSuccess = false
     for (let attempt = 1; attempt <= 5; attempt++) {
@@ -488,7 +473,8 @@ async function uploadVideo(options: { filePath: string; cookies?: string }) {
           uploaded,
           total,
           speed,
-          eta: speed > 0 ? Math.ceil((total - uploaded) / (speed * 1024 * 1024)) : -1
+          eta: speed > 0 ? Math.ceil((total - uploaded) / speed) : -1,  // speed is in B/s
+          videoId
         })
       })
 
@@ -504,14 +490,15 @@ async function uploadVideo(options: { filePath: string; cookies?: string }) {
       throw new Error('Failed to upload to CDN after 5 attempts')
     }
 
-    postMessage({ type: 'status', status: 'completed' })
-    postMessage({ type: 'complete', success: true })
+    postMessage({ type: 'status', status: 'completed', videoId })
+    postMessage({ type: 'complete', success: true, videoId })
 
   } catch (error) {
     console.error('[UPLOAD] Upload error:', error instanceof Error ? error.message : error)
     postMessage({
       type: 'error',
-      error: error instanceof Error ? error.message : 'Unknown upload error'
+      error: error instanceof Error ? error.message : 'Unknown upload error',
+      videoId
     })
   }
 }

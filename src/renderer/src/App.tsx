@@ -55,6 +55,7 @@ function App() {
   } = useAppStore()
 
   const [isLoading, setIsLoading] = useState(true)
+  const [loginEmail, setLoginEmail] = useState<string | null>(null)
 
   // Helper function to read cookies for an account
   const accountsReadCookies = async (accountId: string): Promise<string | null> => {
@@ -83,6 +84,30 @@ function App() {
 
         const loadedAccounts = await window.electronAPI.accountsList()
         setAccounts(loadedAccounts)
+
+        // Auto-login for accounts with credentials but no cookies
+        // First, find accounts that need login
+        const accountsNeedingLogin = loadedAccounts.filter((a: { needsLogin: boolean }) => a.needsLogin)
+        if (accountsNeedingLogin.length > 0) {
+          // Set login email for loading display
+          setLoginEmail(accountsNeedingLogin[0].email)
+        }
+
+        const autoLoginResults = await window.electronAPI.accountsAutoLogin()
+        if (autoLoginResults && autoLoginResults.length > 0) {
+          const successful = autoLoginResults.filter((r: { success: boolean }) => r.success).length
+          addLog({
+            id: crypto.randomUUID(),
+            timestamp: new Date(),
+            level: successful > 0 ? 'success' : 'error',
+            message: `Auto-login: ${successful}/${autoLoginResults.length} účtů přihlášeno`,
+            source: 'app'
+          })
+          // Refresh accounts list after auto-login
+          const refreshedAccounts = await window.electronAPI.accountsList()
+          setAccounts(refreshedAccounts)
+        }
+        setLoginEmail(null)
 
         const platformInfo = await window.electronAPI.platformInfo()
         updateStats({ activeAccounts: loadedAccounts.length })
@@ -319,11 +344,19 @@ function App() {
         videoId?: string  // Track which video is uploading
       }
 
+      // Helper to find upload item by video.id or fallback to active upload
+      const findUploadItem = () => {
+        const { queue } = useAppStore.getState()
+        if (progressData.videoId) {
+          return queue.find(item => item.video.id === progressData.videoId)
+        }
+        return queue.find(item => item.phase === 'upload' && item.status === 'active')
+      }
+
       // Sync upload progress to queue
       if (progressData.progress !== undefined || progressData.speed !== undefined) {
-        const { queue, updateQueueItem } = useAppStore.getState()
-        // Find the active upload item (phase: 'upload')
-        const uploadItem = queue.find(item => item.phase === 'upload' && item.status === 'active')
+        const { updateQueueItem } = useAppStore.getState()
+        const uploadItem = findUploadItem()
         if (uploadItem) {
           updateQueueItem(uploadItem.id, {
             uploadProgress: progressData.progress,
@@ -335,8 +368,8 @@ function App() {
 
       // Handle upload completion
       if (progressData.type === 'complete') {
-        const { queue, updateQueueItem } = useAppStore.getState()
-        const uploadItem = queue.find(item => item.phase === 'upload' && item.status === 'active')
+        const { updateQueueItem } = useAppStore.getState()
+        const uploadItem = findUploadItem()
         if (uploadItem) {
           if (progressData.error) {
             updateQueueItem(uploadItem.id, {
@@ -732,7 +765,9 @@ function App() {
       <div className="min-h-screen bg-bg-main flex items-center justify-center">
         <div className="text-center">
           <div className="w-12 h-12 border-4 border-accent border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-text-secondary">Načítání...</p>
+          <p className="text-text-secondary">
+            {loginEmail ? `Logging in as ${loginEmail}...` : 'Načítání...'}
+          </p>
         </div>
       </div>
     )

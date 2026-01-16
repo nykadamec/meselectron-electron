@@ -13,6 +13,9 @@ interface Account {
   cookiesFile: string
   isActive: boolean
   lastUsed?: Date
+  credits?: number
+  hasCredentials?: boolean
+  needsLogin?: boolean
 }
 
 interface Settings {
@@ -80,9 +83,23 @@ ipcMain.handle('accounts:list', async () => {
   try {
     const files = await fs.readdir(accountsPath)
     console.log('[IPC] Files in DATA:', files)
-    const cookieFiles = files.filter(f => f.startsWith('login_') && f.endsWith('.dat'))
-    console.log('[IPC] Cookie files found:', cookieFiles)
 
+    // Find both cookie files and credentials files
+    const cookieFiles = files.filter(f => f.startsWith('login_') && f.endsWith('.dat'))
+    const credentialsFiles = files.filter(f => f.startsWith('credentials_') && f.endsWith('.dat'))
+
+    console.log('[IPC] Cookie files found:', cookieFiles)
+    console.log('[IPC] Credentials files found:', credentialsFiles)
+
+    // Build a map of email -> credentials
+    const credentialsMap = new Map<string, { file: string; email: string; password?: string }>()
+    for (const credFile of credentialsFiles) {
+      // Format: credentials_email@domain.com.dat
+      const email = credFile.replace('credentials_', '').replace('.dat', '')
+      credentialsMap.set(email, { file: credFile, email })
+    }
+
+    // Create accounts from cookie files
     const accounts: Account[] = await Promise.all(cookieFiles.map(async (file, index) => {
       const cookiesPath = path.join(accountsPath, file)
 
@@ -105,9 +122,9 @@ ipcMain.handle('accounts:list', async () => {
         }
         cookieCount = cookies.length
         cookieHeader = cookies.join('; ')
-        console.log(`[IPC] ${file}: ${cookieCount} cookies načteno: ${cookieNames.slice(0, 5).join(', ')}${cookieNames.length > 5 ? '...' : ''}`)
+        console.log(`[IPC] ${file}: ${cookieCount} cookies loaded: ${cookieNames.slice(0, 5).join(', ')}${cookieNames.length > 5 ? '...' : ''}`)
       } catch (err) {
-        console.error(`[IPC] ${file}: Chyba čtení cookies: ${err}`)
+        console.error(`[IPC] ${file}: Error reading cookies: ${err}`)
         cookieHeader = ''
       }
 
@@ -137,19 +154,124 @@ ipcMain.handle('accounts:list', async () => {
         }
       }
 
+      // Format: login_email@domain.com.dat
+      const emailFromFile = file.replace('login_', '').replace('.dat', '')
+
       return {
         id: `account-${index}`,
-        email: file.replace('login_', '').replace('.dat', ''),
+        email: emailFromFile,
         cookiesFile: cookiesPath,
         isActive: true,
-        credits
+        credits,
+        hasCredentials: credentialsMap.has(emailFromFile)
       }
     }))
 
-    console.log('[IPC] Accounts with credits:', accounts.map(a => ({ id: a.id, email: a.email, credits: a.credits })))
+    // Add accounts that have credentials but no cookie file (need login)
+    for (const credFile of credentialsFiles) {
+      try {
+        const credPath = path.join(accountsPath, credFile)
+        const credContent = await fs.readFile(credPath, 'utf-8')
+        const emailMatch = credContent.match(/email=([^\n]+)/)
+        const emailFromFile = emailMatch ? emailMatch[1].trim() : credFile
+
+        const alreadyExists = accounts.some(a => a.email === emailFromFile)
+
+        if (!alreadyExists) {
+          console.log(`[IPC] Adding account with credentials only: ${emailFromFile}`)
+          accounts.push({
+            id: `account-${accounts.length}`,
+            email: emailFromFile,
+            cookiesFile: path.join(accountsPath, `login_${credFile.replace('credentials_', '')}`),
+            isActive: true,
+            credits: 0,
+            hasCredentials: true,
+            needsLogin: true
+          })
+        }
+      } catch (err) {
+        console.error(`[IPC] Error reading credentials file ${credFile}:`, err)
+      }
+    }
+
+    console.log('[IPC] Accounts with credits:', accounts.map(a => ({ id: a.id, email: a.email, credits: a.credits, needsLogin: (a as unknown as { needsLogin?: boolean }).needsLogin })))
     return accounts
   } catch (error) {
     console.log('[IPC] Error reading accounts:', error)
+    return []
+  }
+})
+
+// Auto-login for accounts that have credentials but no cookies file
+ipcMain.handle('accounts:auto-login', async () => {
+  const projectRoot = getProjectRoot()
+  const accountsPath = path.join(projectRoot, 'DATA')
+  console.log('[IPC] Running auto-login for accounts without cookies...')
+
+  try {
+    const files = await fs.readdir(accountsPath)
+    const credentialsFiles = files.filter(f => f.startsWith('credentials_') && f.endsWith('.dat'))
+
+    console.log(`[IPC] Found ${credentialsFiles.length} credentials file(s)`)
+
+    const results: { email: string; success: boolean; error?: string }[] = []
+
+    for (const credFile of credentialsFiles) {
+      const loginFile = credFile.replace('credentials_', 'login_')
+      const loginPath = path.join(accountsPath, loginFile)
+
+      // Skip if login file already exists
+      if (existsSync(loginPath)) {
+        console.log(`[IPC] Skipping ${credFile} - login file already exists`)
+        continue
+      }
+
+      console.log(`[IPC] Auto-login for: ${credFile}`)
+
+      // Read credentials
+      const credPath = path.join(accountsPath, credFile)
+      const credContent = await fs.readFile(credPath, 'utf-8')
+      const emailMatch = credContent.match(/email=([^\n]+)/)
+      const passwordMatch = credContent.match(/password=([^\n]+)/)
+
+      if (!emailMatch || !passwordMatch) {
+        console.error(`[IPC] Invalid credentials file: ${credFile}`)
+        results.push({ email: credFile, success: false, error: 'Invalid format' })
+        continue
+      }
+
+      const email = emailMatch[1].trim()
+      const password = passwordMatch[1].trim()
+
+      // Perform login via session worker
+      try {
+        console.log(`[IPC] Logging in as: ${email}`)
+        const result = await sendToSessionWorker({ type: 'login', email, password })
+
+        if (result && typeof result === 'object' && 'cookies' in result) {
+          const cookies = (result as { cookies: string }).cookies
+
+          // Save cookies to file
+          const cookieLines = cookies.split(';').map(c => c.trim().split('=')[0] + '=' + c.trim().split('=').slice(1).join('='))
+          await fs.writeFile(loginPath, cookieLines.join('\n'), 'utf-8')
+
+          console.log(`[IPC] ✅ Auto-login successful for: ${email}`)
+          results.push({ email, success: true })
+        } else {
+          console.error(`[IPC] ❌ Auto-login failed for: ${email}`)
+          results.push({ email, success: false, error: 'Login failed' })
+        }
+      } catch (err) {
+        console.error(`[IPC] Auto-login error for ${email}:`, err)
+        results.push({ email, success: false, error: String(err) })
+      }
+    }
+
+    console.log(`[IPC] Auto-login complete: ${results.filter(r => r.success).length}/${results.length} successful`)
+    return results
+
+  } catch (error) {
+    console.error('[IPC] Auto-login error:', error)
     return []
   }
 })
@@ -182,6 +304,179 @@ ipcMain.handle('accounts:read-cookies', async (_, accountId: string) => {
     return cookieHeader
   } catch (err) {
     console.error(`[IPC] accounts:read-cookies error: ${err}`)
+    return null
+  }
+})
+
+// Save account credentials (email + password)
+ipcMain.handle('accounts:save-credentials', async (_, accountId: string, credentials: { email: string; password: string }) => {
+  const accountsPath = path.join(getProjectRoot(), 'DATA')
+  try {
+    const files = await fs.readdir(accountsPath)
+    const cookieFiles = files.filter(f => f.startsWith('login_') && f.endsWith('.dat'))
+
+    const account = cookieFiles.find((_, index) => `account-${index}` === accountId)
+    if (!account) return false
+
+    // Create credentials filename from email (format: credentials_email@domain.com.dat)
+    const credentialsPath = path.join(accountsPath, `credentials_${credentials.email}.dat`)
+
+    // Save credentials
+    const content = `email=${credentials.email}\npassword=${credentials.password}\n`
+    await fs.writeFile(credentialsPath, content, 'utf-8')
+
+    console.log(`[IPC] Credentials saved for: ${credentials.email}`)
+    return true
+  } catch (err) {
+    console.error(`[IPC] accounts:save-credentials error: ${err}`)
+    return false
+  }
+})
+
+// Get account credentials
+ipcMain.handle('accounts:get-credentials', async (_, accountId: string) => {
+  const accountsPath = path.join(getProjectRoot(), 'DATA')
+  try {
+    const files = await fs.readdir(accountsPath)
+    const credentialFiles = files.filter(f => f.startsWith('credentials_') && f.endsWith('.dat'))
+
+    const credentialFile = credentialFiles.find((_, index) => `account-${index}` === accountId)
+    if (!credentialFile) return null
+
+    const credentialsPath = path.join(accountsPath, credentialFile)
+    const content = await fs.readFile(credentialsPath, 'utf-8')
+
+    // Parse credentials
+    const lines = content.trim().split('\n')
+    const credentials: Record<string, string> = {}
+    for (const line of lines) {
+      const [key, value] = line.split('=')
+      if (key && value) {
+        credentials[key.trim()] = value.trim()
+      }
+    }
+
+    if (credentials.email && credentials.password) {
+      return { email: credentials.email, password: credentials.password }
+    }
+    return null
+  } catch (err) {
+    console.error(`[IPC] accounts:get-credentials error: ${err}`)
+    return null
+  }
+})
+
+// Login and refresh cookies (for when session expires)
+ipcMain.handle('accounts:refresh-session', async (_, accountId: string) => {
+  const accountsPath = path.join(getProjectRoot(), 'DATA')
+  try {
+    // Read credentials file directly
+    const files = await fs.readdir(accountsPath)
+    const credentialFiles = files.filter(f => f.startsWith('credentials_') && f.endsWith('.dat'))
+    const credentialFile = credentialFiles.find((_, index) => `account-${index}` === accountId)
+
+    if (!credentialFile) {
+      console.error('[IPC] No credentials found for account:', accountId)
+      return null
+    }
+
+    const credentialsPath = path.join(accountsPath, credentialFile)
+    const credContent = await fs.readFile(credentialsPath, 'utf-8')
+
+    // Parse credentials
+    const credLines = credContent.trim().split('\n')
+    const credData: Record<string, string> = {}
+    for (const line of credLines) {
+      const [key, value] = line.split('=')
+      if (key && value) {
+        credData[key.trim()] = value.trim()
+      }
+    }
+
+    if (!credData.email || !credData.password) {
+      console.error('[IPC] Missing email or password in credentials')
+      return null
+    }
+
+    console.log(`[IPC] Re-logging in as: ${credData.email}`)
+
+    // Perform login
+    const loginUrl = 'https://prehrajto.cz/?frm=homepageLoginForm-loginForm'
+    const loginData = new URLSearchParams()
+    loginData.append('email', credData.email)
+    loginData.append('password', credData.password)
+    loginData.append('_do', 'homepageLoginForm-loginForm-submit')
+    loginData.append('login', 'Přihlásit se')
+
+    const loginResponse = await axios.post(loginUrl, loginData, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36',
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Origin': 'https://prehrajto.cz',
+        'Referer': 'https://prehrajto.cz/',
+      },
+      maxRedirects: 5
+    })
+
+    // Extract cookies from response
+    const setCookieHeader = loginResponse.headers['set-cookie']
+    if (!setCookieHeader) {
+      console.error('[IPC] No cookies in login response')
+      return null
+    }
+
+    // Parse Set-Cookie header
+    const newCookies: string[] = []
+    for (const cookie of setCookieHeader) {
+      const cookiePart = cookie.split(';')[0]
+      if (cookiePart && cookiePart.includes('=')) {
+        newCookies.push(cookiePart)
+      }
+    }
+
+    // Also get remaining cookies from the session by making a follow-up request
+    const cookieHeader = newCookies.join('; ')
+
+    // Verify login worked by fetching profile
+    const profileResponse = await axios.get('https://prehrajto.cz/profil', {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Cookie': cookieHeader
+      },
+      timeout: 15000
+    })
+
+    if (!profileResponse.data.includes(credData.email) && !profileResponse.data.includes('Můj profil')) {
+      console.error('[IPC] Login verification failed')
+      return null
+    }
+
+    // Update cookies file
+    const cookieFiles = files.filter(f => f.startsWith('login_') && f.endsWith('.dat'))
+    const cookieFile = cookieFiles.find((_, index) => `account-${index}` === accountId)
+
+    if (cookieFile) {
+      const cookiesPath = path.join(accountsPath, cookieFile)
+      // Fetch full cookies from profile page
+      const fullCookiesResponse = await axios.get('https://prehrajto.cz/', {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          'Cookie': cookieHeader
+        },
+        timeout: 15000
+      })
+
+      // Get all cookies from jar
+      const allCookies = fullCookiesResponse.headers['set-cookie'] || []
+      const cookieLines = allCookies.map(c => c.split(';')[0]).join('\n')
+
+      await fs.writeFile(cookiesPath, cookieLines, 'utf-8')
+      console.log(`[IPC] Cookies updated for: ${credData.email}`)
+    }
+
+    return cookieHeader
+  } catch (err) {
+    console.error(`[IPC] accounts:refresh-session error: ${err}`)
     return null
   }
 })
@@ -546,12 +841,32 @@ ipcMain.handle('download:extract-metadata', async (_, { url, cookies }) => {
 })
 
 // Upload handler using worker
-ipcMain.handle('upload:start', async (_, options: { filePath: string; cookies?: string }) => {
+ipcMain.handle('upload:start', async (_, options: { filePath: string; accountId?: string; cookies?: string; videoId?: string }) => {
+  // Get cookies from session worker if accountId is provided
+  let cookies = options.cookies || ''
+
+  if (options.accountId && !cookies) {
+    try {
+      const sessionResult = await sendToSessionWorker({ type: 'get-cookies', accountId: options.accountId })
+      if (sessionResult && typeof sessionResult === 'object' && 'cookies' in sessionResult) {
+        cookies = (sessionResult as { cookies: string }).cookies
+        console.log(`[IPC] Got cookies for upload, source: ${(sessionResult as { source?: string }).source || 'unknown'}`)
+      }
+    } catch (error) {
+      console.error('[IPC] Failed to get session cookies for upload:', error)
+    }
+  }
+
   return new Promise((resolve, reject) => {
     const workerPath = path.join(__dirname, '../workers/upload.worker.cjs')
 
+    const workerPayload = {
+      ...options,
+      cookies  // Include resolved cookies
+    }
+
     const worker = new Worker(workerPath, {
-      workerData: { type: 'upload', payload: options }
+      workerData: { type: 'upload', payload: workerPayload }
     })
 
     worker.on('message', (update) => {
@@ -569,12 +884,32 @@ ipcMain.handle('upload:start', async (_, options: { filePath: string; cookies?: 
 })
 
 // Video Discovery handler
-ipcMain.handle('discover:start', async (_, options: { cookies: string; count: number }) => {
+ipcMain.handle('discover:start', async (_, options: { accountId?: string; cookies?: string; count: number; videoId?: string }) => {
+  // Get cookies from session worker if accountId is provided
+  let cookies = options.cookies || ''
+
+  if (options.accountId && !cookies) {
+    try {
+      const sessionResult = await sendToSessionWorker({ type: 'get-cookies', accountId: options.accountId })
+      if (sessionResult && typeof sessionResult === 'object' && 'cookies' in sessionResult) {
+        cookies = (sessionResult as { cookies: string }).cookies
+        console.log(`[IPC] Got cookies for discover, source: ${(sessionResult as { source?: string }).source || 'unknown'}`)
+      }
+    } catch (error) {
+      console.error('[IPC] Failed to get session cookies for discover:', error)
+    }
+  }
+
   return new Promise((resolve, reject) => {
     const workerPath = path.join(__dirname, '../workers/discover.worker.cjs')
 
+    const workerPayload = {
+      ...options,
+      cookies  // Include resolved cookies
+    }
+
     const worker = new Worker(workerPath, {
-      workerData: { type: 'discover', payload: options }
+      workerData: { type: 'discover', payload: workerPayload }
     })
 
     worker.on('message', (update) => {
@@ -640,4 +975,116 @@ ipcMain.handle('file:select-output', async () => {
     properties: ['openDirectory', 'createDirectory']
   })
   return result.filePaths[0] || null
+})
+
+// ============================================================================
+// Session Worker Communication
+// ============================================================================
+
+/**
+ * Get session worker instance (singleton per process)
+ */
+let sessionWorker: Worker | null = null
+
+function getSessionWorker(): Worker {
+  if (!sessionWorker) {
+    const workerPath = path.join(__dirname, '../workers/session.worker.cjs')
+    sessionWorker = new Worker(workerPath, {
+      workerData: { type: 'session' }
+    })
+
+    sessionWorker.on('error', (error) => {
+      console.error('[IPC] Session worker error:', error)
+    })
+
+    sessionWorker.on('exit', (code) => {
+      console.log('[IPC] Session worker exited:', code)
+      sessionWorker = null
+    })
+  }
+  return sessionWorker
+}
+
+/**
+ * Send message to session worker and wait for response
+ */
+async function sendToSessionWorker(message: Record<string, unknown>, timeoutMs: number = 30000): Promise<unknown> {
+  const worker = getSessionWorker()
+
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      reject(new Error(`Session worker timeout (${timeoutMs}ms)`))
+    }, timeoutMs)
+
+    const handler = (response: unknown) => {
+      clearTimeout(timeout)
+      worker.off('message', handler)
+      resolve(response)
+    }
+
+    worker.on('message', handler)
+    worker.postMessage(message)
+  })
+}
+
+// Session handlers
+ipcMain.handle('session:get-cookies', async (_, accountId: string) => {
+  try {
+    console.log(`[IPC] session:get-cookies for account: ${accountId}`)
+    const result = await sendToSessionWorker({ type: 'get-cookies', accountId })
+
+    if (result && typeof result === 'object' && 'cookies' in result) {
+      console.log(`[IPC] Got cookies, source: ${(result as { source?: string }).source || 'unknown'}`)
+      return result
+    }
+
+    console.error('[IPC] session:get-cookies failed:', result)
+    return null
+  } catch (error) {
+    console.error('[IPC] session:get-cookies error:', error)
+    return null
+  }
+})
+
+ipcMain.handle('session:validate', async (_, accountId: string) => {
+  try {
+    console.log(`[IPC] session:validate for account: ${accountId}`)
+    const result = await sendToSessionWorker({ type: 'validate', accountId })
+    return result
+  } catch (error) {
+    console.error('[IPC] session:validate error:', error)
+    return { type: 'validation', valid: false, reason: 'error' }
+  }
+})
+
+ipcMain.handle('session:refresh', async (_, accountId: string) => {
+  try {
+    console.log(`[IPC] session:refresh for account: ${accountId}`)
+    const result = await sendToSessionWorker({ type: 'refresh', accountId })
+    return result
+  } catch (error) {
+    console.error('[IPC] session:refresh error:', error)
+    return { type: 'refresh-failed', error: String(error) }
+  }
+})
+
+ipcMain.handle('session:login', async (_, email: string, password: string) => {
+  try {
+    console.log(`[IPC] session:login for: ${email}`)
+    const result = await sendToSessionWorker({ type: 'login', email, password })
+    return result
+  } catch (error) {
+    console.error('[IPC] session:login error:', error)
+    return { type: 'login-failed', error: String(error) }
+  }
+})
+
+ipcMain.handle('session:save-credentials', async (_, email: string, password: string) => {
+  try {
+    await sendToSessionWorker({ type: 'save-credentials', email, password })
+    return { success: true }
+  } catch (error) {
+    console.error('[IPC] session:save-credentials error:', error)
+    return { success: false, error: String(error) }
+  }
 })

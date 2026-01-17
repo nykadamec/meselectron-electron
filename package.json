@@ -1,6 +1,6 @@
 {
   "name": "prehrajto-autopilot",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Prehraj.to AutoPilot - Desktop application for video management",
   "main": "dist/main/index.js",
   "appName": "Prehraj.to AutoPilot",

@@ -1,6 +1,7 @@
 # Project ignores
 node_modules/
 dist/
+output/
 DATA/
 VIDEOS/
 .serena/

@@ -9,7 +9,7 @@ set -e
 APP_NAME="Prehraj.to AutoPilot"
 REPO_OWNER="nykadamec"
 REPO_NAME="meselectron-electron"
-DIST_DIR="dist/build"
+DIST_DIR="../output/build"
 RELEASES_DIR="releases"
 
 # Colors for output
@@ -58,7 +58,7 @@ check_prerequisites() {
 
 # Get current version from package.json
 get_version() {
-    node -e "console.log(require('./package.json').version)"
+    node -e "console.log(require('../package.json').version)"
 }
 
 # Build the application
@@ -69,7 +69,7 @@ build_app() {
     rm -rf dist
     rm -rf $RELEASES_DIR
 
-    # Build
+    # Build (Linux target is disabled in electron-builder.yml)
     npm run build
 
     log_info "Build completed"
@@ -81,8 +81,8 @@ create_checksums() {
 
     cd $DIST_DIR
 
-    # Generate SHA-256 checksums for all installer files
-    sha256sum *.dmg *.exe *.zip *.tar.xz > checksums.txt
+    # Generate SHA-256 checksums for all installer files (Linux excluded)
+    sha256sum *.dmg *.exe *.zip > checksums.txt
 
     cd - > /dev/null
 
@@ -123,15 +123,23 @@ create_release() {
     if command -v gh &> /dev/null; then
         cd $DIST_DIR
 
-        gh release create "v$version" \
-            --title "$APP_NAME v$version" \
-            --notes "$release_notes" \
-            *.dmg *.exe *.zip *.tar.xz checksums.txt checksums.txt.asc 2>/dev/null || \
-        gh release create "v$version" \
-            --title "$APP_NAME v$version" \
-            --notes "$release_notes" \
-            --draft \
-            *.dmg *.exe *.zip *.tar.xz checksums.txt checksums.txt.asc
+        # Collect existing files only
+        local assets=()
+        for f in *.dmg *.exe *.zip checksums.txt checksums.txt.asc; do
+            [ -f "$f" ] && assets+=("$f")
+        done
+
+        if [ ${#assets[@]} -gt 0 ]; then
+            gh release create "v$version" \
+                --title "$APP_NAME v$version" \
+                --notes "$release_notes" \
+                "${assets[@]}" 2>/dev/null || \
+            gh release create "v$version" \
+                --title "$APP_NAME v$version" \
+                --notes "$release_notes" \
+                --draft \
+                "${assets[@]}"
+        fi
 
         cd - > /dev/null
 
@@ -156,8 +164,8 @@ upload_to_github() {
 
     cd $DIST_DIR
 
-    # Upload each asset
-    for file in *.dmg *.exe *.zip *.tar.xz checksums.txt checksums.txt.asc; do
+    # Upload each asset (Linux excluded)
+    for file in *.dmg *.exe *.zip checksums.txt checksums.txt.asc; do
         if [ -f "$file" ]; then
             log_info "Uploading $file..."
             gh release upload "v$version" "$file" --repo "$REPO_OWNER/$REPO_NAME" || true

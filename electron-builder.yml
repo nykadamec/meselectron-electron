@@ -2,7 +2,7 @@ appId: com.prehrajto.autopilot
 productName: Prehraj.to AutoPilot
 
 directories:
-  output: dist/build
+  output: output/build
 
 # Zakázat automatický signing pro dev-only build
 mac:
@@ -10,3 +10,4 @@ mac:
   identity: null
   hardenedRuntime: false
   gatekeeperAssess: false
+

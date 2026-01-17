@@ -7,3 +7,6 @@ directories:
 # Zakázat automatický signing pro dev-only build
 mac:
   sign: false
+  identity: null
+  hardenedRuntime: false
+  gatekeeperAssess: false

@@ -39,16 +39,29 @@ const getAppDataPath = () => path.join(getUserDataPath(), 'prehrajto-autopilot')
 
 // Get the path to the project root (where DATA folder is located)
 const getProjectRoot = () => {
-  const cwd = process.cwd()
-  const dataPath = path.join(cwd, 'DATA')
+  // For bundled app, use process.execPath to find the app location
+  const execDir = path.dirname(process.execPath)
+  const dataPath = path.join(execDir, 'DATA')
   if (existsSync(dataPath)) {
-    return cwd
+    return execDir
   }
-  const parentDataPath = path.join(cwd, '..', 'DATA')
-  if (existsSync(parentDataPath)) {
-    return path.join(cwd, '..')
+
+  // For development: check current working directory
+  const cwd = process.cwd()
+  if (cwd !== execDir) {
+    const cwdDataPath = path.join(cwd, 'DATA')
+    if (existsSync(cwdDataPath)) {
+      return cwd
+    }
+
+    // Check parent directory (for development)
+    const parentDataPath = path.join(cwd, '..', 'DATA')
+    if (existsSync(parentDataPath)) {
+      return path.join(cwd, '..')
+    }
   }
-  return cwd
+
+  return execDir
 }
 
 // Settings handlers

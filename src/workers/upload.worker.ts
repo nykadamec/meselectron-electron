@@ -269,15 +269,18 @@ async function uploadToCDN(
 
     // Create the HTTP request (response callback will use uploadResolve)
     const req = protocol.request(options, (res) => {
-      let body = ''
-      res.on('data', (chunk) => { body += chunk })
+      const chunks: Buffer[] = []
+      res.on('data', (chunk: Buffer) => { chunks.push(chunk) })
       res.on('end', () => {
+        const body = Buffer.concat(chunks).toString('utf8')
         console.log(`[UPLOAD] CDN response: ${res.statusCode}`)
         if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
           console.log('[UPLOAD] File uploaded successfully to CDN')
+          sslAgent.destroy()  // Cleanup TLS agent after successful upload
           uploadResolve?.(true)
         } else {
           console.error('[UPLOAD] CDN error:', res.statusCode, body.substring(0, 200))
+          sslAgent.destroy()
           uploadResolve?.(false)
         }
       })
@@ -285,6 +288,7 @@ async function uploadToCDN(
 
     req.on('error', (e) => {
       console.error('[UPLOAD] Request error:', e)
+      sslAgent.destroy()
       uploadResolve?.(false)
     })
 
@@ -302,8 +306,14 @@ async function uploadToCDN(
     })
 
     fileStream.on('data', (chunk: Buffer) => {
-      // Write chunk synchronously - let Node.js handle backpressure
-      req.write(chunk)
+      // CRITICAL: Handle backpressure - req.write() returns false when buffer is full
+      // If we don't pause the stream, data accumulates in memory (causing 6-7GB RAM usage!)
+      const canContinue = req.write(chunk)
+
+      if (!canContinue) {
+        // Buffer is full - pause stream and wait for drain
+        fileStream.pause()
+      }
 
       bytesSent += chunk.length
 
@@ -325,11 +335,21 @@ async function uploadToCDN(
       onProgress(progress, bytesSent, fileSize, lastSpeedBps)
     })
 
+    // Resume stream after drain - this is the key backpressure mechanism
+    req.on('drain', () => {
+      console.log('[UPLOAD] Drain event - resuming stream')
+      fileStream.resume()
+    })
+
     fileStream.on('end', () => {
       // Send closing boundary and end request
       req.write(closing)
       req.end()
       console.log('[UPLOAD] File data sent, waiting for CDN response...')
+
+      // Cleanup buffers after sending
+      preamble.fill(0)
+      closing.fill(0)
     })
 
     fileStream.on('error', (err) => {

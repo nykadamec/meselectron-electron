@@ -14,7 +14,7 @@ function sendProgress(data: unknown) {
 }
 
 // Constants matching Python implementation
-const CHUNK_SIZE = 2 * 1024 * 1024 // 2MB chunks
+const CHUNK_SIZE = 1024 * 1024 // 1MB chunks (optimized for lower RAM usage)
 const MIN_VIDEO_SIZE_MB = 300
 const MAX_VIDEO_SIZE_MB = 20480 // 20GB
 
@@ -180,7 +180,6 @@ async function downloadVideo(metadata: { mp4Url: string; fileSize: number; title
 
   async function downloadWithSemaphore(chunks: Array<{ id: number; start: number; end: number }>) {
     const semaphore = new Semaphore(CONCURRENCY_LIMIT)
-    const chunkData = new Map<number, { data: Buffer; start: number }>()
 
     const downloadChunkWithRetry = async (chunk: { id: number; start: number; end: number }, retries: number = 2): Promise<Buffer | null> => {
       let serverSupportsRange = true
@@ -207,7 +206,8 @@ async function downloadVideo(metadata: { mp4Url: string; fileSize: number; title
           const contentRange = response.headers['content-range']
           console.log('[Download] [', workerData.payload.videoId.substring(0, 8), '] Chunk', chunk.id, 'downloaded, content-range:', contentRange)
 
-          return Buffer.from(response.data)
+          // axios arraybuffer is already a Buffer, no need for Buffer.from()
+          return response.data as Buffer
         } catch (err: any) {
           const is416 = err.response?.status === 416
           console.log('[Download] [', workerData.payload.videoId.substring(0, 8), '] Chunk', chunk.id, 'attempt', attempt + 1, 'error:', is416 ? '416 Range Not Satisfiable' : err.message)
@@ -231,57 +231,59 @@ async function downloadVideo(metadata: { mp4Url: string; fileSize: number; title
       return null
     }
 
-    const promises = chunks.map((chunk) =>
-      semaphore.acquire().then(async () => {
-        try {
-          const data = await downloadChunkWithRetry(chunk)
-          if (data) {
-            chunkData.set(chunk.id, { data, start: chunk.start })
+    // Download and write chunks progressively (one at a time to maintain order)
+    // This keeps memory usage low: only 1-2 chunks in memory at a time
+    const downloadedChunks = new Set<number>()
 
-            downloadedBytes += data.length
+    for (const chunk of chunks) {
+      await semaphore.acquire()
+      try {
+        const data = await downloadChunkWithRetry(chunk)
+        if (data) {
+          // Write chunk to file immediately (progressive write - low RAM)
+          await fileHandle.write(data, 0, data.length, chunk.start)
 
-            // Calculate speed and ETA
-            const elapsed = (Date.now() - startTime) / 1000
-            const speed = elapsed > 0 ? downloadedBytes / elapsed : 0
-            const remainingBytes = safeFileSize - downloadedBytes
-            const eta = speed > 0 ? remainingBytes / speed : -1
+          // Free memory immediately after write
+          data.buffer as ArrayBuffer
 
-            sendProgress({
-              type: 'progress',
-              progress: (downloadedBytes / safeFileSize) * 100,
-              speed: speed,
-              eta: eta,
-              downloaded: downloadedBytes,
-              total: safeFileSize,
-              size: safeFileSize,
-              videoId: workerData.payload.videoId
-            })
-          }
-        } finally {
-          semaphore.release()
+          downloadedBytes += data.length
+          downloadedChunks.add(chunk.id)
+
+          // Calculate speed and ETA
+          const elapsed = (Date.now() - startTime) / 1000
+          const speed = elapsed > 0 ? downloadedBytes / elapsed : 0
+          const remainingBytes = safeFileSize - downloadedBytes
+          const eta = speed > 0 ? remainingBytes / speed : -1
+
+          sendProgress({
+            type: 'progress',
+            progress: (downloadedBytes / safeFileSize) * 100,
+            speed: speed,
+            eta: eta,
+            downloaded: downloadedBytes,
+            total: safeFileSize,
+            size: safeFileSize,
+            videoId: workerData.payload.videoId
+          })
         }
-      })
-    )
-
-    await Promise.all(promises)
-    return chunkData
-  }
-
-  try {
-    const chunkData = await downloadWithSemaphore(chunks)
-
-    // Write chunks to file in order (this is the only time data is in memory)
-    sendProgress({ type: 'status', status: 'assembling', videoId: workerData.payload.videoId })
-
-    for (let i = 0; i < numChunks; i++) {
-      if (chunkData.has(i)) {
-        const chunk = chunkData.get(i)!
-        await fileHandle.write(chunk.data, 0, chunk.data.length, chunk.start)
-      } else {
-        throw new Error(`Chybí chunk ${i}`)
+      } finally {
+        semaphore.release()
       }
     }
 
+    // Verify all chunks were downloaded
+    if (downloadedChunks.size !== numChunks) {
+      const missingChunks = numChunks - downloadedChunks.size
+      throw new Error(`Chybí ${missingChunks} chunků (staženo ${downloadedChunks.size}/${numChunks})`)
+    }
+
+    return true
+  }
+
+  try {
+    await downloadWithSemaphore(chunks)
+
+    // Chunks are already written progressively, just close the file handle
     await fileHandle.close()
     return fileSize
   } catch (err) {

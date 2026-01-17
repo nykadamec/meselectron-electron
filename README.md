@@ -121,33 +121,28 @@ npm run build:all
 
 ---
 
-<div align="center">
+## ⚙️ Funkce
 
-### 📄 [ČESKY]
+### 📤 Nahrávání na více účtů
+- Podpora více účtů prehraj.to
+- Automatické přihlášení pomocí uložených credentials
+- Správa sessions a automatické obnovení
 
-</div>
+### 📋 Správa fronty
+- **Řazení přetažením** (drag & drop) - změna pořadí stahování
+- **Zrušení stahování** - aktivní stahování lze kdykoliv zrušit
+- **Pokračování** - aplikace si pamatuje zpracovaná videa i po restartu
+
+### 💾 Persistence dat
+- Zpracovaná videa se ukládají a zůstanou označena i po restartu aplikace
+- Ukládá se do: `~/Library/Application Support/prehrajto-autopilot/processed.json`
+
+### 🔍 Objevování videí
+- Automatické hledání videí na prehraj.to
+- Filtrování podle délky a velikosti
+- Export do fronty stahování
 
 ---
-
-<div align="center">
-
-### 💻 Desktop aplikace pro automatické nahrávání videí
-
-### 🚧 !! VE VÝVOJI !!
-
-<br>
-
-| 🎯 Nahrávání na více účtů | ✅ |
-|---------------------------|----|
-| 📊 Sledování pokroku | ✅ |
-| 📋 Správa fronty | ✅ |
-| ✋ Drag & drop | ✅ |
-| 🔍 Objevování videí | ✅ |
-| 🔐 Správa sessions | ✅ |
-| 🌙 Tmavý/světlý motiv | 🔄 |
-| 🔄 Automatické aktualizace | 🔄 |
-
-<br>
 
 ### 🚀 Rychlý start
 
@@ -157,15 +152,6 @@ npm run build
 npm run dev
 ```
 
-<br>
-
-### 📝 Licence
-
-**ISC**
-
 ---
 
-<div align="right">
-
-
-</div>
+### 📝 Licence

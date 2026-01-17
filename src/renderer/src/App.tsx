@@ -1,6 +1,8 @@
 import { useEffect, useState, useCallback } from 'react'
 import path from 'path'
 import { useAppStore, setOnQueueChange, loadProcessedFromDisk } from './store'
+import { initUpdaterStore } from './store/updater'
+import { initI18n, useLocaleStore } from './i18n'
 import { Header } from './components/Header'
 import { AccountCard } from './components/AccountCard'
 import { StatsPanel } from './components/StatsPanel'
@@ -11,9 +13,11 @@ import { LogViewer } from './components/LogViewer'
 import { SettingsPanel } from './components/SettingsPanel'
 import { Footer } from './components/Footer'
 import { VideoList } from './components/VideoList'
+import { UpdaterNotification } from './components/UpdaterNotification'
 import type { VideoCandidate } from './types'
 
 function App() {
+  const localeStore = useLocaleStore()
   const {
     activeTab,
     setActiveTab,
@@ -182,6 +186,10 @@ function App() {
       }
 
       try {
+        // Initialize i18n first
+        await initI18n()
+        console.log('[i18n] Initialized with locale:', useLocaleStore.getState().locale)
+
         const loadedSettings = await window.electronAPI.settingsRead()
         setSettings(loadedSettings)
 
@@ -225,6 +233,9 @@ function App() {
           message: `Aplikace spuštěna na ${platformInfo.platform}`,
           source: 'app'
         })
+
+        // Initialize updater (auto-check if enabled)
+        initUpdaterStore().catch(console.error)
 
         setIsLoading(false)
       } catch (error) {
@@ -828,48 +839,54 @@ function App() {
 
       <main className="flex-1 flex overflow-hidden">
         {/* Sidebar */}
-        <aside className="w-64 bg-bg-card border-r border-border flex flex-col">
-          {/* Accounts */}
-          <div className="p-4 border-b border-border">
-            <h3 className="text-sm font-medium text-text-secondary uppercase tracking-wider mb-3">
-              Účty
-            </h3>
-            <div className="space-y-2">
-              {accounts.map((account) => (
-                <AccountCard key={account.id} account={account} />
-              ))}
-              {accounts.length === 0 && (
-                <p className="text-sm text-text-muted">Žádné účty nenalezeny</p>
-              )}
+        <aside className="w-64 bg-bg-card border-r border-border flex flex-col relative">
+          {/* Scrollable Content */}
+          <div className="flex-1 overflow-y-auto custom-scrollbar">
+            {/* Accounts */}
+            <div className="p-4 border-b border-border">
+              <h3 className="text-sm font-medium text-text-secondary uppercase tracking-wider mb-3">
+                {localeStore.t('accounts.accounts')}
+              </h3>
+              <div className="space-y-2">
+                {accounts.map((account) => (
+                  <AccountCard key={account.id} account={account} />
+                ))}
+                {accounts.length === 0 && (
+                  <p className="text-sm text-text-muted">{localeStore.t('accounts.noAccounts')}</p>
+                )}
+              </div>
             </div>
+
+            {/* Stats */}
+            <div className="p-4 border-b border-border">
+              <StatsPanel stats={stats} accounts={accounts} />
+            </div>
+
+            {/* Spacer for fixed button */}
+            <div className="h-16 flex-shrink-0"></div>
           </div>
 
-          {/* Stats */}
-          <div className="p-4 border-b border-border">
-            <StatsPanel stats={stats} accounts={accounts} />
-          </div>
-
-          {/* Actions */}
-          <div className="p-4 space-y-2 mt-auto">
+          {/* Actions - fixed at bottom of sidebar */}
+          <div className="absolute bottom-0 left-0 right-0 p-4 pb-8 border-t border-border bg-bg-card">
             <button
               onClick={handleOpenFolder}
               className="btn-secondary w-full text-sm"
             >
-              Otevřít složku
+              {localeStore.t('actions.openFolder')}
             </button>
           </div>
         </aside>
 
         {/* Main Content */}
-        <div className="flex-1 flex flex-col overflow-hidden">
+        <div className="flex-1 flex flex-col min-h-0">
           {/* Tabs */}
-          <div className="flex border-b border-border bg-bg-card">
+          <div className="flex-shrink-0 flex border-b border-border bg-bg-card">
             {[
-              { id: 'videa', label: 'Videa' },
-              { id: 'downloads', label: 'Process' },
-              { id: 'logs', label: 'Logy' },
-              { id: 'settings', label: 'Nastavení' },
-              { id: 'myvideos', label: 'Moje videa' }
+              { id: 'videos', label: localeStore.t('nav.videos') },
+              { id: 'downloads', label: localeStore.t('nav.process') },
+              { id: 'logs', label: localeStore.t('nav.logs') },
+              { id: 'settings', label: localeStore.t('nav.settings') },
+              { id: 'myvideos', label: localeStore.t('nav.myVideos') }
             ].map((tab) => (
               <button
                 key={tab.id}
@@ -887,8 +904,8 @@ function App() {
 
           {/* Tab Content - scroll only in content area */}
           <div className="flex-1 overflow-y-auto custom-scrollbar">
-            <div className="p-4 pb-24"> {/* pb-24 for fixed footer */}
-              {activeTab === 'videa' && (
+            <div className="p-4 pb-14">
+              {activeTab === 'videos' && (
                 <VideoList />
               )}
 
@@ -932,7 +949,7 @@ function App() {
             {activeTab === 'myvideos' && (
               <div className="space-y-4">
                 <div className="flex justify-between items-center">
-                  <h2 className="text-lg font-medium">Moje videa</h2>
+                  <h2 className="text-lg font-medium">{localeStore.t('nav.myVideos')}</h2>
                   <button
                     onClick={() => {
                       // Load first page with first active account's cookies
@@ -949,7 +966,7 @@ function App() {
                     disabled={isLoadingMyVideos || accounts.length === 0}
                     className="btn-primary disabled:opacity-50"
                   >
-                    {isLoadingMyVideos ? 'Načítání...' : 'Načíst videa'}
+                    {isLoadingMyVideos ? localeStore.t('progress.loading') : localeStore.t('actions.loadVideos')}
                   </button>
                 </div>
 
@@ -971,8 +988,8 @@ function App() {
 
                 {myVideos.length === 0 && !isLoadingMyVideos && (
                   <div className="text-center py-12">
-                    <p className="text-text-muted">Žádná videa k zobrazení</p>
-                    <p className="text-xs text-text-muted mt-2">Klikněte na tlačítko "Načíst videa" pro zobrazení vašich nahraných videí</p>
+                    <p className="text-text-muted">{localeStore.t('empty.myVideos')}</p>
+                    <p className="text-xs text-text-muted mt-2">{localeStore.t('empty.myVideosHelp')}</p>
                   </div>
                 )}
 
@@ -999,7 +1016,7 @@ function App() {
                         }}
                         className="btn-secondary"
                       >
-                        Zpět (stránka {myVideosPage - 1})
+                        {localeStore.t('actions.back')} ({localeStore.t('actions.page', { num: String(myVideosPage - 1) })})
                       </button>
                     )}
                     <button
@@ -1016,7 +1033,7 @@ function App() {
                       }}
                       className="btn-secondary"
                     >
-                      Načíst další (stránka {myVideosPage + 1})
+                      {localeStore.t('actions.next')} ({localeStore.t('actions.page', { num: String(myVideosPage + 1) })})
                     </button>
                   </div>
                 )}
@@ -1038,10 +1055,10 @@ function App() {
                         }}
                         className="btn-secondary"
                       >
-                        Zpět (stránka {myVideosPage - 1})
+                        {localeStore.t('actions.back')} ({localeStore.t('actions.page', { num: String(myVideosPage - 1) })})
                       </button>
                     )}
-                    <p className="text-xs text-text-muted self-center">Konec seznamu</p>
+                    <p className="text-xs text-text-muted self-center">{localeStore.t('actions.endOfList')}</p>
                   </div>
                 )}
               </div>
@@ -1053,6 +1070,9 @@ function App() {
           <Footer />
         </div>
       </main>
+
+      {/* Updater notification overlay */}
+      <UpdaterNotification />
     </div>
   )
 }

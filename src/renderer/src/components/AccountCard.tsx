@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react'
 import type { Account } from '../types'
+import { useLocaleStore } from '../i18n'
 
 interface AccountCardProps {
   account: Account
 }
 
 export function AccountCard({ account }: AccountCardProps) {
+  const localeStore = useLocaleStore()
   const [credits, setCredits] = useState<number | null>(null)
   const [loadingCredits, setLoadingCredits] = useState(false)
 
@@ -43,11 +45,11 @@ export function AccountCard({ account }: AccountCardProps) {
         <p className="text-sm font-medium truncate">{displayName}</p>
         <div className="flex items-center gap-2">
           <p className="text-xs text-text-muted">
-            {account.isActive ? 'Aktivní' : 'Neaktivní'}
+            {account.isActive ? localeStore.t('accounts.active') : localeStore.t('accounts.inactive')}
           </p>
           {credits !== null && (
             <span className="text-xs text-accent">
-              {credits.toLocaleString()} bodů
+              {localeStore.t('stats.points', { count: credits.toLocaleString() })}
             </span>
           )}
           {loadingCredits && (

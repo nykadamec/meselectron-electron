@@ -1,6 +1,6 @@
 import { ipcMain, dialog, shell, BrowserWindow } from 'electron'
 import path from 'path'
-import fs from 'fs/promises'
+import * as fs from 'fs/promises'
 import { existsSync } from 'fs'
 import axios from 'axios'
 import { Worker } from 'worker_threads'
@@ -38,30 +38,9 @@ const getUserDataPath = () => process.env.APPDATA || path.join(process.env.HOME 
 const getAppDataPath = () => path.join(getUserDataPath(), 'prehrajto-autopilot')
 
 // Get the path to the project root (where DATA folder is located)
+// Uses OS-specific user data path: %APPDATA%\prehrajto-autopilot (Windows) or ~/Library/Application Support/prehrajto-autopilot (macOS)
 const getProjectRoot = () => {
-  // For bundled app, use process.execPath to find the app location
-  const execDir = path.dirname(process.execPath)
-  const dataPath = path.join(execDir, 'DATA')
-  if (existsSync(dataPath)) {
-    return execDir
-  }
-
-  // For development: check current working directory
-  const cwd = process.cwd()
-  if (cwd !== execDir) {
-    const cwdDataPath = path.join(cwd, 'DATA')
-    if (existsSync(cwdDataPath)) {
-      return cwd
-    }
-
-    // Check parent directory (for development)
-    const parentDataPath = path.join(cwd, '..', 'DATA')
-    if (existsSync(parentDataPath)) {
-      return path.join(cwd, '..')
-    }
-  }
-
-  return execDir
+  return getAppDataPath()
 }
 
 // Settings handlers
@@ -595,27 +574,55 @@ ipcMain.handle('version:check', async () => {
   }
 })
 
-// Get local version from package.json
+// Get local version from package.json (use app directory, not data directory)
 ipcMain.handle('version:get', async () => {
   try {
-    const packageJsonPath = path.join(getProjectRoot(), 'package.json')
+    // Use process.cwd() for development, or __dirname for production
+    const appPath = process.env.NODE_ENV === 'production'
+      ? path.dirname(process.execPath)
+      : process.cwd()
+    const packageJsonPath = path.join(appPath, 'package.json')
+    console.log('[Version] Looking for package.json at:', packageJsonPath)
     const data = await fs.readFile(packageJsonPath, 'utf-8')
     const packageJson = JSON.parse(data)
-    return packageJson.version || null
-  } catch {
-    return null
+    console.log('[Version] Found version:', packageJson.version)
+    return packageJson.version || '0.0.0'
+  } catch (error) {
+    // Fallback to bundled package.json in resources
+    console.log('[Version] Primary path failed, trying resources path')
+    try {
+      const bundledPath = path.join(process.resourcesPath, 'app', 'package.json')
+      console.log('[Version] Looking for package.json at:', bundledPath)
+      const data = await fs.readFile(bundledPath, 'utf-8')
+      const packageJson = JSON.parse(data)
+      console.log('[Version] Found version in resources:', packageJson.version)
+      return packageJson.version || '0.0.0'
+    } catch (error2) {
+      console.log('[Version] All paths failed, returning 0.0.0')
+      return '0.0.0'
+    }
   }
 })
 
 // Get app name from package.json
 ipcMain.handle('name:get', async () => {
   try {
-    const packageJsonPath = path.join(getProjectRoot(), 'package.json')
+    const appPath = process.env.NODE_ENV === 'production'
+      ? path.dirname(process.execPath)
+      : process.cwd()
+    const packageJsonPath = path.join(appPath, 'package.json')
     const data = await fs.readFile(packageJsonPath, 'utf-8')
     const packageJson = JSON.parse(data)
     return packageJson.appName || 'Prehrajto AutoPilot'
   } catch {
-    return 'Prehrajto AutoPilot'
+    try {
+      const bundledPath = path.join(process.resourcesPath, 'app', 'package.json')
+      const data = await fs.readFile(bundledPath, 'utf-8')
+      const packageJson = JSON.parse(data)
+      return packageJson.appName || 'Prehrajto AutoPilot'
+    } catch {
+      return 'Prehrajto AutoPilot'
+    }
   }
 })
 
@@ -1155,5 +1162,425 @@ ipcMain.on('download:stop', () => {
     console.log('[IPC] Download worker terminated')
   } else {
     console.log('[IPC] No active download worker to terminate')
+  }
+})
+
+// ============ UPDATER HANDLERS ============
+
+import {
+  checkForUpdate
+} from './github-releases'
+
+import {
+  verifyDownload
+} from './verification'
+
+import {
+  downloadFile
+} from './download-manager'
+
+import { app } from 'electron'
+
+// Updater state
+interface UpdaterState {
+  status: 'idle' | 'checking' | 'downloading' | 'verifying' | 'ready' | 'installing' | 'error'
+  currentVersion: string
+  latestVersion: string | null
+  downloadProgress: number
+  downloadedBytes: number
+  totalBytes: number
+  speed: number
+  eta: number
+  error: string | null
+  releaseInfo: {
+    version: string
+    name: string
+    publishedAt: string
+    body: string
+    downloadUrl: string
+    fileSize: number
+  } | null
+}
+
+let updaterState: UpdaterState = {
+  status: 'idle',
+  currentVersion: '0.0.0',
+  latestVersion: null,
+  downloadProgress: 0,
+  downloadedBytes: 0,
+  totalBytes: 0,
+  speed: 0,
+  eta: 0,
+  error: null,
+  releaseInfo: null
+}
+
+let downloadCancellation: (() => void) | null = null
+
+// Get app version from package.json
+async function getAppVersion(): Promise<string> {
+  try {
+    const packageJsonPath = path.join(getProjectRoot(), 'package.json')
+    const data = await fs.readFile(packageJsonPath, 'utf-8')
+    const packageJson = JSON.parse(data)
+    return packageJson.version || '0.0.0'
+  } catch {
+    return '0.0.0'
+  }
+}
+
+// Get update download directory
+function getUpdateDir(): string {
+  const userDataPath = getUserDataPath()
+  return path.join(userDataPath, 'prehrajto-autopilot', 'updates')
+}
+
+// Notify renderer about updater state change
+function notifyStateChange() {
+  BrowserWindow.getAllWindows().forEach(win => {
+    win.webContents.send('updater:state', updaterState)
+  })
+}
+
+// Updater: get current version
+ipcMain.handle('updater:get-current-version', async () => {
+  return await getAppVersion()
+})
+
+// Updater: check for updates
+ipcMain.handle('updater:check', async () => {
+  try {
+    updaterState.status = 'checking'
+    updaterState.error = null
+    notifyStateChange()
+
+    const currentVersion = await getAppVersion()
+    updaterState.currentVersion = currentVersion
+
+    console.log(`[UPDATER] Checking for updates (current: ${currentVersion})...`)
+
+    const result = await checkForUpdate(currentVersion)
+
+    if (result.updateAvailable && result.release && result.asset) {
+      updaterState.status = 'idle'
+      updaterState.latestVersion = result.latestVersion
+      updaterState.releaseInfo = {
+        version: result.latestVersion!,
+        name: result.release.name,
+        publishedAt: result.release.published_at,
+        body: result.release.body,
+        downloadUrl: result.asset.browser_download_url,
+        fileSize: result.asset.size
+      }
+
+      console.log(`[UPDATER] Update available: ${result.latestVersion}`)
+      notifyStateChange()
+
+      return {
+        updateAvailable: true,
+        currentVersion,
+        latestVersion: result.latestVersion,
+        release: updaterState.releaseInfo
+      }
+    }
+
+    updaterState.status = 'idle'
+    updaterState.latestVersion = currentVersion
+    console.log(`[UPDATER] No update available`)
+    notifyStateChange()
+
+    return {
+      updateAvailable: false,
+      currentVersion,
+      latestVersion: null
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error'
+    updaterState.status = 'error'
+    updaterState.error = message
+    notifyStateChange()
+
+    console.error(`[UPDATER] Check failed: ${message}`)
+    return {
+      updateAvailable: false,
+      error: message
+    }
+  }
+})
+
+// Updater: start download
+ipcMain.handle('updater:download', async () => {
+  try {
+    if (!updaterState.releaseInfo) {
+      throw new Error('No update available')
+    }
+
+    if (updaterState.status === 'downloading') {
+      return { success: false, error: 'Download already in progress' }
+    }
+
+    updaterState.status = 'downloading'
+    updaterState.downloadProgress = 0
+    updaterState.downloadedBytes = 0
+    updaterState.totalBytes = updaterState.releaseInfo.fileSize
+    updaterState.speed = 0
+    updaterState.eta = 0
+    updaterState.error = null
+    notifyStateChange()
+
+    const updateDir = getUpdateDir()
+    const fileName = path.basename(updaterState.releaseInfo.downloadUrl)
+    const destination = path.join(updateDir, fileName)
+
+    // Ensure update directory exists
+    await fs.mkdir(updateDir, { recursive: true })
+
+    console.log(`[UPDATER] Starting download: ${updaterState.releaseInfo.downloadUrl}`)
+    console.log(`[UPDATER] Destination: ${destination}`)
+
+    await downloadFile({
+      url: updaterState.releaseInfo.downloadUrl,
+      destination,
+      onProgress: (progress) => {
+        updaterState.downloadProgress = progress.percentage
+        updaterState.downloadedBytes = progress.downloadedBytes
+        updaterState.speed = progress.speedBytesPerSecond
+        updaterState.eta = progress.etaSeconds
+        notifyStateChange()
+      }
+    })
+
+    console.log(`[UPDATER] Download complete: ${destination}`)
+
+    // Verify download
+    updaterState.status = 'verifying'
+    notifyStateChange()
+
+    // Download checksums file
+    const checksumsUrl = updaterState.releaseInfo.downloadUrl.replace(
+      /\.(dmg|exe|zip)$/i,
+      '-checksums.txt'
+    )
+    const checksumsDestination = path.join(updateDir, 'checksums.txt')
+
+    try {
+      await downloadFile({
+        url: checksumsUrl,
+        destination: checksumsDestination,
+        onProgress: (progress) => {
+          updaterState.downloadProgress = progress.percentage
+          notifyStateChange()
+        }
+      })
+
+      // Verify checksums
+      const verifyResult = await verifyDownload(destination, checksumsDestination)
+
+      if (!verifyResult.valid) {
+        throw new Error(`Verification failed: ${verifyResult.error}`)
+      }
+
+      console.log(`[UPDATER] Verification complete`)
+    } catch (verifyError) {
+      console.warn(`[UPDATER] Checksum verification failed (may be optional): ${verifyError}`)
+    }
+
+    updaterState.status = 'ready'
+    updaterState.downloadProgress = 100
+    notifyStateChange()
+
+    return {
+      success: true,
+      filePath: destination,
+      fileSize: updaterState.totalBytes
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error'
+    updaterState.status = 'error'
+    updaterState.error = message
+    notifyStateChange()
+
+    console.error(`[UPDATER] Download failed: ${message}`)
+    return { success: false, error: message }
+  }
+})
+
+// Updater: get download progress
+ipcMain.handle('updater:get-progress', () => {
+  return {
+    status: updaterState.status,
+    progress: updaterState.downloadProgress,
+    downloadedBytes: updaterState.downloadedBytes,
+    totalBytes: updaterState.totalBytes,
+    speed: updaterState.speed,
+    eta: updaterState.eta,
+    error: updaterState.error
+  }
+})
+
+// Updater: install and restart (macOS)
+ipcMain.handle('updater:install-macos', async () => {
+  try {
+    if (updaterState.status !== 'ready') {
+      throw new Error('No downloaded update ready')
+    }
+
+    updaterState.status = 'installing'
+    notifyStateChange()
+
+    const { spawn } = await import('child_process')
+    const updateDir = getUpdateDir()
+
+    // Find the downloaded file
+    const files = await fs.readdir(updateDir)
+    const dmgFile = files.find(f => f.endsWith('.dmg'))
+
+    if (!dmgFile) {
+      throw new Error('No DMG file found')
+    }
+
+    const dmgPath = path.join(updateDir, dmgFile)
+
+    // Mount DMG and copy app
+    const mountResult = await new Promise<{ mountPoint: string }>((resolve, reject) => {
+      const proc = spawn('hdiutil', ['attach', '-plist', '-nobrowse', dmgPath])
+
+      let output = ''
+      proc.stdout.on('data', (data) => {
+        output += data.toString()
+      })
+
+      proc.on('close', (code) => {
+        if (code === 0) {
+          // Parse plist to find mount point
+          const mountMatch = output.match(/<string>\/Volumes\/([^<]+)<\/string>/)
+          if (mountMatch) {
+            resolve({ mountPoint: `/Volumes/${mountMatch[1]}` })
+          } else {
+            reject(new Error('Failed to find mount point'))
+          }
+        } else {
+          reject(new Error(`hdiutil failed with code ${code}`))
+        }
+      })
+    })
+
+    const appSource = path.join(mountResult.mountPoint, 'Prehraj.to AutoPilot.app')
+    const appsFolder = '/Applications'
+    const appDest = path.join(appsFolder, 'Prehraj.to AutoPilot.app')
+    const backupDest = path.join(appsFolder, 'Prehraj.to AutoPilot.app.backup')
+
+    // Remove backup if exists
+    try {
+      await fs.rm(backupDest, { recursive: true, force: true })
+    } catch {}
+
+    // Backup current app
+    try {
+      await fs.rename(appDest, backupDest)
+    } catch (err) {
+      console.warn(`[UPDATER] Could not backup current app: ${err}`)
+    }
+
+    // Copy new app
+    await fs.cp(appSource, appDest, { recursive: true })
+
+    // Unmount DMG
+    await new Promise<void>((resolve, reject) => {
+      const proc = spawn('hdiutil', ['detach', mountResult.mountPoint])
+
+      proc.on('close', (code) => {
+        if (code === 0) {
+          resolve()
+        } else {
+          reject(new Error(`hdiutil detach failed with code ${code}`))
+        }
+      })
+    })
+
+    // Remove backup
+    try {
+      await fs.rm(backupDest, { recursive: true, force: true })
+    } catch {}
+
+    console.log('[UPDATER] Installation complete, restarting...')
+
+    // Restart app
+    app.relaunch({ args: process.argv.slice(1).concat(['--updated']) })
+    app.exit(0)
+
+    return { success: true }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error'
+    updaterState.status = 'error'
+    updaterState.error = message
+    notifyStateChange()
+
+    console.error(`[UPDATER] Installation failed: ${message}`)
+    return { success: false, error: message }
+  }
+})
+
+// Updater: cancel download
+ipcMain.handle('updater:cancel', async () => {
+  if (downloadCancellation) {
+    downloadCancellation()
+    downloadCancellation = null
+  }
+
+  updaterState.status = 'idle'
+  updaterState.downloadProgress = 0
+  updaterState.downloadedBytes = 0
+  notifyStateChange()
+
+  return { success: true }
+})
+
+// Updater: clear downloaded update
+ipcMain.handle('updater:clear', async () => {
+  try {
+    const updateDir = getUpdateDir()
+    await fs.rm(updateDir, { recursive: true, force: true })
+
+    updaterState.status = 'idle'
+    updaterState.downloadProgress = 0
+    updaterState.downloadedBytes = 0
+    updaterState.releaseInfo = null
+    notifyStateChange()
+
+    return { success: true }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error'
+    return { success: false, error: message }
+  }
+})
+
+// i18n: read locale file
+ipcMain.handle('locale:read', async (_, locale: 'en' | 'cz') => {
+  try {
+    // Try to find locale file in different locations
+    const possiblePaths = [
+      path.join(process.cwd(), 'locales', `${locale}.yaml`),
+      path.join(getProjectRoot(), 'locales', `${locale}.yaml`),
+      path.join(__dirname, '..', '..', 'locales', `${locale}.yaml`),
+      path.join(__dirname, '..', 'locales', `${locale}.yaml`)
+    ]
+
+    for (const filePath of possiblePaths) {
+      try {
+        const content = await fs.readFile(filePath, 'utf-8')
+        console.log(`[IPC] Loaded locale file: ${filePath}`)
+        return content
+      } catch {
+        // Continue to next path
+      }
+    }
+
+    // If file not found, return empty string (i18n will use fallback)
+    console.warn(`[IPC] Locale file not found: ${locale}.yaml`)
+    return ''
+  } catch (error) {
+    console.error(`[IPC] Error reading locale file: ${error}`)
+    return ''
   }
 })

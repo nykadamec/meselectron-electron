@@ -96,6 +96,47 @@ interface ElectronAPI {
 
   // Remove listeners
   removeListener: (channel: string, callback: (...args: unknown[]) => void) => void
+
+  // Updater
+  updaterCheck: () => Promise<{
+    updateAvailable: boolean
+    latestVersion: string | null
+    release: {
+      tag_name: string
+      name: string
+      published_at: string
+      body: string
+      html_url: string
+      assets: Array<{
+        name: string
+        browser_download_url: string
+        size: number
+        content_type: string
+      }>
+    } | null
+    asset: {
+      name: string
+      browser_download_url: string
+      size: number
+      content_type: string
+    } | null
+  }>
+  updaterDownload: (url: string) => Promise<void>
+  updaterInstall: () => Promise<void>
+  updaterCancel: () => void
+  updaterClear: () => Promise<void>
+  updaterGetCurrentVersion: () => Promise<string>
+  updaterGetProgress: () => Promise<{
+    downloadedBytes: number
+    totalBytes: number
+    percentage: number
+    speedBytesPerSecond: number
+    etaSeconds: number
+  } | null>
+  onUpdaterProgress: (callback: (event: unknown, data: unknown) => void) => void
+
+  // i18n
+  readLocaleFile: (locale: 'en' | 'cz') => Promise<string>
 }
 
 declare global {

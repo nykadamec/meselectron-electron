@@ -1,8 +1,13 @@
 import { useState } from 'react'
 import { useAppStore } from '../store'
+import { useUpdaterStore, checkForUpdates } from '../store/updater'
+import { useLocaleStore, type Locale } from '../i18n'
+import { RefreshCw } from 'lucide-react'
 
 export function SettingsPanel() {
   const { settings, setSettings } = useAppStore()
+  const updaterStore = useUpdaterStore()
+  const localeStore = useLocaleStore()
   const [saved, setSaved] = useState(false)
 
   const handleSave = async () => {
@@ -18,24 +23,46 @@ export function SettingsPanel() {
     }
   }
 
+  const handleLocaleChange = async (locale: Locale) => {
+    await localeStore.setLocale(locale)
+  }
+
   // Default output dir - will be replaced by actual value from IPC
   const defaultOutputDir = settings.outputDir || '~/Videos/meselectron'
 
   return (
-    <div className="max-w-2xl space-y-6">
-      <div>
-        <h2 className="text-lg font-medium mb-1">Nastavení</h2>
-        <p className="text-sm text-text-muted">Konfigurace aplikace</p>
+    <div className="flex flex-col h-full">
+      {/* Header - fixed at top */}
+      <div className="flex-shrink-0 p-4 pb-2">
+        <h2 className="text-lg font-medium mb-1">{localeStore.t('settings.title')}</h2>
+        <p className="text-sm text-text-muted">{localeStore.t('settings.subtitle')}</p>
       </div>
 
-      {/* General Settings */}
-      <div className="card space-y-4">
-        <h3 className="font-medium text-text-secondary uppercase text-xs tracking-wider">Obecné</h3>
+      {/* Scrollable content */}
+      <div className="flex-1 overflow-y-auto custom-scrollbar">
+        <div className="p-4 pt-0 max-w-2xl space-y-6">
+          {/* General Settings */}
+          <div className="card space-y-4">
+            <h3 className="font-medium text-text-secondary uppercase text-xs tracking-wider">{localeStore.t('settings.general')}</h3>
+
+        {/* Language selector */}
+        <div>
+          <label className="block font-medium mb-2">{localeStore.t('settings.language')}</label>
+          <select
+            value={localeStore.locale}
+            onChange={(e) => handleLocaleChange(e.target.value as Locale)}
+            className="w-full input-dark"
+          >
+            <option value="en">English</option>
+            <option value="cz">Čeština</option>
+          </select>
+          <p className="text-xs text-text-muted mt-1">{localeStore.t('settings.languageRestart')}</p>
+        </div>
 
         <div className="flex items-center justify-between">
           <div>
-            <p className="font-medium">Automatický restart</p>
-            <p className="text-sm text-text-muted">Restartovat aplikaci po dokončení všech úloh</p>
+            <p className="font-medium">{localeStore.t('settings.autoRestart')}</p>
+            <p className="text-sm text-text-muted">{localeStore.t('settings.autoRestartDesc')}</p>
           </div>
           <label className="relative inline-flex items-center cursor-pointer">
             <input
@@ -51,11 +78,11 @@ export function SettingsPanel() {
 
       {/* Concurrency Settings */}
       <div className="card space-y-4">
-        <h3 className="font-medium text-text-secondary uppercase text-xs tracking-wider">Paralelizace</h3>
+        <h3 className="font-medium text-text-secondary uppercase text-xs tracking-wider">{localeStore.t('settings.parallelism')}</h3>
 
         <div>
           <label className="block font-medium mb-2">
-            Počet současných stahování: <span className="text-accent">{settings.downloadConcurrency}</span>
+            {localeStore.t('settings.downloadConcurrency', { count: String(settings.downloadConcurrency) })}
           </label>
           <input
             type="range"
@@ -73,7 +100,7 @@ export function SettingsPanel() {
 
         <div>
           <label className="block font-medium mb-2">
-            Počet současných nahrávání: <span className="text-accent">{settings.uploadConcurrency}</span>
+            {localeStore.t('settings.uploadConcurrency', { count: String(settings.uploadConcurrency) })}
           </label>
           <input
             type="range"
@@ -91,7 +118,7 @@ export function SettingsPanel() {
 
         <div>
           <label className="block font-medium mb-2">
-            Počet videí ke stažení: <span className="text-accent">{settings.videoCount}</span>
+            {localeStore.t('settings.videoCount', { count: String(settings.videoCount) })}
           </label>
           <input
             type="range"
@@ -110,13 +137,13 @@ export function SettingsPanel() {
 
       {/* Download Settings */}
       <div className="card space-y-4">
-        <h3 className="font-medium text-text-secondary uppercase text-xs tracking-wider">Stahování</h3>
+        <h3 className="font-medium text-text-secondary uppercase text-xs tracking-wider">{localeStore.t('settings.download')}</h3>
 
         {/* Watermark toggle */}
         <div className="flex items-center justify-between">
           <div>
-            <p className="font-medium">Přidat vodoznak</p>
-            <p className="text-sm text-text-muted">Přidat text "prehrajto.cz" na video</p>
+            <p className="font-medium">{localeStore.t('settings.addWatermark')}</p>
+            <p className="text-sm text-text-muted">{localeStore.t('settings.addWatermarkDesc')}</p>
           </div>
           <label className="relative inline-flex items-center cursor-pointer">
             <input
@@ -132,8 +159,8 @@ export function SettingsPanel() {
         {/* HQ Processing toggle */}
         <div className="flex items-center justify-between">
           <div>
-            <p className="font-medium">HQ Processing</p>
-            <p className="text-sm text-text-muted">Pokud je HQ Processing zapnutý, process bude brát především odkazy na original video + kvalita</p>
+            <p className="font-medium">{localeStore.t('settings.hqProcessing')}</p>
+            <p className="text-sm text-text-muted">{localeStore.t('settings.hqProcessingDesc')}</p>
           </div>
           <label className="relative inline-flex items-center cursor-pointer">
             <input
@@ -148,22 +175,22 @@ export function SettingsPanel() {
 
         {/* Download mode */}
         <div>
-          <label className="block font-medium mb-2">Režim stahování</label>
+          <label className="block font-medium mb-2">{localeStore.t('settings.downloadMode')}</label>
           <select
             value={settings.downloadMode}
             onChange={(e) => setSettings({ ...settings, downloadMode: e.target.value as 'ffmpeg-chunks' | 'curl' | 'wget' })}
             className="w-full input-dark"
           >
-            <option value="ffmpeg-chunks">FFmpeg Chunks (parallel)</option>
-            <option value="curl">cURL</option>
-            <option value="wget">wget</option>
+            <option value="ffmpeg-chunks">{localeStore.t('settings.ffmpegChunks')}</option>
+            <option value="curl">{localeStore.t('settings.curl')}</option>
+            <option value="wget">{localeStore.t('settings.wget')}</option>
           </select>
-          <p className="text-xs text-text-muted mt-1">cURL/wget stáhnou celý soubor najednou</p>
+          <p className="text-xs text-text-muted mt-1">{localeStore.t('settings.downloadModeDesc')}</p>
         </div>
 
         {/* Output directory */}
         <div>
-          <label className="block font-medium mb-2">Výstupní složka</label>
+          <label className="block font-medium mb-2">{localeStore.t('settings.outputDir')}</label>
           <div className="flex gap-2">
             <input
               type="text"
@@ -173,21 +200,21 @@ export function SettingsPanel() {
               placeholder={defaultOutputDir}
             />
             <button onClick={handleSelectOutputDir} className="btn-secondary text-sm whitespace-nowrap">
-              Procházet
+              {localeStore.t('settings.browse')}
             </button>
           </div>
-          <p className="text-xs text-text-muted mt-1">Sem se uloží stažená videa</p>
+          <p className="text-xs text-text-muted mt-1">{localeStore.t('settings.outputDirDesc')}</p>
         </div>
       </div>
 
       {/* Speed Settings */}
       <div className="card space-y-4">
-        <h3 className="font-medium text-text-secondary uppercase text-xs tracking-wider">Rychlost</h3>
+        <h3 className="font-medium text-text-secondary uppercase text-xs tracking-wider">{localeStore.t('settings.speed')}</h3>
 
         <div className="flex items-center justify-between">
           <div>
-            <p className="font-medium">Bez limitu rychlosti</p>
-            <p className="text-sm text-text-muted">Rychlejší stahování na rychlých discích</p>
+            <p className="font-medium">{localeStore.t('settings.noSpeedLimit')}</p>
+            <p className="text-sm text-text-muted">{localeStore.t('settings.noSpeedLimitDesc')}</p>
           </div>
           <label className="relative inline-flex items-center cursor-pointer">
             <input
@@ -201,10 +228,69 @@ export function SettingsPanel() {
         </div>
       </div>
 
+      {/* Updater Settings */}
+      <div className="card space-y-4">
+        <h3 className="font-medium text-text-secondary uppercase text-xs tracking-wider">{localeStore.t('settings.updates')}</h3>
+
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="font-medium">{localeStore.t('settings.autoCheck')}</p>
+            <p className="text-sm text-text-muted">{localeStore.t('settings.autoCheckDesc')}</p>
+          </div>
+          <label className="relative inline-flex items-center cursor-pointer">
+            <input
+              type="checkbox"
+              checked={updaterStore.autoCheck}
+              onChange={(e) => updaterStore.setAutoCheck(e.target.checked)}
+              className="sr-only peer"
+            />
+            <div className="w-11 h-6 bg-bg-hover peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-accent"></div>
+          </label>
+        </div>
+
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="font-medium">{localeStore.t('settings.autoDownload')}</p>
+            <p className="text-sm text-text-muted">{localeStore.t('settings.autoDownloadDesc')}</p>
+          </div>
+          <label className="relative inline-flex items-center cursor-pointer">
+            <input
+              type="checkbox"
+              checked={updaterStore.autoDownload}
+              onChange={(e) => updaterStore.setAutoDownload(e.target.checked)}
+              className="sr-only peer"
+            />
+            <div className="w-11 h-6 bg-bg-hover peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-accent"></div>
+          </label>
+        </div>
+
+        {/* Version info */}
+        <div className="pt-2 border-t border-border">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="font-medium">{localeStore.t('settings.version')}</p>
+              <p className="text-sm text-text-muted">
+                Current: {updaterStore.currentVersion}
+                {updaterStore.latestVersion && updaterStore.latestVersion !== updaterStore.currentVersion && (
+                  <span className="text-accent ml-2">→ {updaterStore.latestVersion}</span>
+                )}
+              </p>
+            </div>
+            <button
+              onClick={() => checkForUpdates()}
+              className="btn-secondary text-sm flex items-center gap-2"
+            >
+              <RefreshCw className="w-4 h-4" />
+              {localeStore.t('settings.checkUpdates')}
+            </button>
+          </div>
+        </div>
+      </div>
+
       {/* Actions */}
       <div className="flex gap-3">
         <button onClick={handleSave} className="btn-primary">
-          {saved ? 'Uloženo!' : 'Uložit nastavení'}
+          {saved ? localeStore.t('settings.saved') : localeStore.t('settings.save')}
         </button>
         <button
           onClick={() => setSettings({
@@ -220,8 +306,10 @@ export function SettingsPanel() {
           })}
           className="btn-secondary"
         >
-          Obnovit výchozí
+          {localeStore.t('settings.resetDefaults')}
         </button>
+      </div>
+      </div>
       </div>
     </div>
   )

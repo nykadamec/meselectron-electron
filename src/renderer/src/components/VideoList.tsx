@@ -230,20 +230,14 @@ export function VideoList() {
         )}
       </div>
 
-      {/* CSS for custom scrollbar */}
+      {/* CSS for hidden scrollbar - functional but invisible */}
       <style>{`
+        .custom-scrollbar {
+          scrollbar-width: none;
+          -ms-overflow-style: none;
+        }
         .custom-scrollbar::-webkit-scrollbar {
-          width: 6px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-track {
-          background: transparent;
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb {
-          background: #27272a;
-          border-radius: 3px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-          background: #3f3f46;
+          display: none;
         }
       `}</style>
     </div>

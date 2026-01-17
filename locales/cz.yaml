@@ -1,0 +1,199 @@
+# i18n překlady - Čeština
+# Prehraj.to AutoPilot
+
+# Header
+header.title: "Prehraj.to AutoPilot"
+header.subtitle: "Automatizace stahování a nahrávání"
+header.processing: "Zpracovávání..."
+header.checkUpdates: "Kontrola aktualizací"
+header.settings: "Nastavení"
+header.minimize: "Minimalizovat"
+
+# Footer
+footer.lang: "LANG : {lang} | BUILD : {build}"
+
+# Stats
+stats.totalUploaded: "Celkem nahraných"
+stats.totalDownloaded: "Celkem staženo"
+stats.activeAccounts: "Aktivních účtů"
+stats.queueLength: "Ve frontě"
+stats.earnings: "Výdělek"
+
+# Video Status
+video.pending: "Čeká"
+video.downloading: "Stahuje"
+video.processing: "Zpracovává"
+video.uploading: "Nahrává"
+video.completed: "Hotovo"
+video.failed: "Chyba"
+video.alreadyExists: "Již existuje"
+video.skipped: "Přeskočeno"
+
+# Queue Status
+queue.active: "Zpracovává"
+queue.completed: "Hotovo"
+queue.failed: "Chyba"
+queue.paused: "Pozastaveno"
+queue.pending: "Čeká"
+queue.downloadPhase: "↓ Stahování"
+queue.uploadPhase: "↑ Nahrávání"
+queue.assembling: "↓ Skládání částí"
+
+# Settings
+settings.title: "Nastavení"
+settings.subtitle: "Konfigurace aplikace"
+settings.general: "Obecné"
+settings.parallelism: "Paralelizace"
+settings.download: "Stahování"
+settings.speed: "Rychlost"
+settings.updates: "Aktualizace"
+
+settings.language: "Jazyk / Language"
+settings.languageRestart: "Změna jazyka se projeví po restartu aplikace"
+
+settings.autoRestart: "Automatický restart"
+settings.autoRestartDesc: "Restartovat aplikaci po dokončení všech úloh"
+
+settings.downloadConcurrency: "Počet současných stahování: {count}"
+settings.uploadConcurrency: "Počet současných nahrávání: {count}"
+settings.videoCount: "Počet videí ke stažení: {count}"
+
+settings.addWatermark: "Přidat vodoznak"
+settings.addWatermarkDesc: "Přidat text \"prehrajto.cz\" na video"
+
+settings.hqProcessing: "HQ Processing"
+settings.hqProcessingDesc: "Pokud je HQ Processing zapnutý, process bude brát především odkazy na original video + kvalita"
+
+settings.downloadMode: "Režim stahování"
+settings.ffmpegChunks: "FFmpeg Chunks (parallel)"
+settings.curl: "cURL"
+settings.wget: "wget"
+settings.downloadModeDesc: "cURL/wget stáhnou celý soubor najednou"
+
+settings.outputDir: "Výstupní složka"
+settings.browse: "Procházet"
+settings.outputDirDesc: "Sem se uloží stažená videa"
+
+settings.noSpeedLimit: "Bez limitu rychlosti"
+settings.noSpeedLimitDesc: "Rychlejší stahování na rychlých discích"
+
+settings.autoCheck: "Automatická kontrola"
+settings.autoCheckDesc: "Kontrolovat nové verze při spuštění aplikace"
+settings.autoDownload: "Automatické stahování"
+settings.autoDownloadDesc: "Stáhnout aktualizaci hned po nalezení"
+settings.version: "Verze aplikace"
+settings.checkUpdates: "Zkontrolovat"
+
+settings.save: "Uložit nastavení"
+settings.saved: "Uloženo!"
+settings.resetDefaults: "Obnovit výchozí"
+
+# Errors
+error.generic: "Chyba"
+error.loading: "Chyba při načítání"
+error.noCookies: "Nejsou poskytnuty cookies - prosím nejprve se přihlaste"
+error.loginFailed: "Přihlášení selhalo"
+error.noCredentials: "Email a heslo jsou vyžadovány"
+error.noAccountId: "ID účtu je vyžadováno"
+error.noCredentialsFound: "Přihlašovací údaje nenalezeny"
+error.refreshFailed: "Obnovení selhalo"
+error.noCookiesAvailable: "Cookies nejsou k dispozici"
+
+# Download errors
+error.videoTooSmall: "Video je příliš malé ({size}MB, minimum je {min}MB)"
+error.videoTooLarge: "Video je příliš velké ({size}MB, maximum je {max}MB)"
+error.metadataExtract: "Chyba při extrakci metadat: {error}"
+error.noVideoUrl: "Nepodařilo se najít video URL na stránce"
+error.noFileSize: "Nepodařilo se zjistit velikost souboru"
+error.rangeNotSupported: "Server nepodporuje stahování po částech"
+error.videoExists: "Video již existuje"
+
+# Upload errors
+error.uploadFailed: "Nepodařilo se nahrát na CDN po 5 pokusech"
+error.unknownUpload: "Neznámá chyba nahrávání"
+error.nonJsonResponse: "Server vrátil {type} místo JSON - pravděpodobně vyžaduje přihlášení"
+error.checkCookies: "Zkontrolujte platnost cookies a přihlaste se znovu na prehrajto.cz"
+
+# Session errors
+error.sessionExpired: "Session vypršela"
+error.sessionInvalid: "Session je neplatná"
+
+# Progress
+progress.checkingUpdates: "Kontrola aktualizací..."
+progress.downloading: "Stahování aktualizace..."
+progress.verifying: "Ověřování..."
+progress.verifyingChecksum: "Ověřování SHA-256 kontrolního součtu..."
+progress.verificationSuccess: "Ověření úspěšné!"
+progress.downloadingUpdate: "Stahování..."
+progress.downloaded: "Staženo"
+progress.speed: "Rychlost"
+progress.remaining: "Zbývá: {eta}"
+progress.updateReady: "Aktualizace připravena"
+progress.installing: "Instalace aktualizace..."
+progress.install: "Nainstalovat a restartovat"
+progress.later: "Později"
+progress.retry: "Zkusit znovu"
+
+# Discover
+progress.discoverStart: "Začínám vyhledávání videí..."
+progress.scanning: "Prohledávám stránku {page}/10 ({name})..."
+progress.foundCandidates: "Nalezeno {count} video kandidátů"
+progress.loadingVideos: "Načítám videa (stránka {page})..."
+
+# Queue
+queue.title: "Fronta"
+queue.empty: "Prázdná fronta"
+queue.addFromVideos: "Přidejte videa z karty \"Videa\""
+queue.cancel: "Zrušit stahování"
+queue.remove: "Odebrat z fronty"
+queue.pause: "Pozastavit"
+queue.resume: "Pokračovat"
+queue.retry: "Zkusit znovu ({count})"
+queue.retryFailed: "Zkusit znovu ({count})"
+queue.cancelQueue: "Zrušit frontu"
+queue.stats: "{pending} čeká | {failed} chybných"
+
+# Actions
+actions.refresh: "Obnovit"
+actions.selectAll: "Vybrat vše"
+actions.deselectAll: "Odebrat vše"
+actions.process: "Zpracovat ({count})"
+actions.back: "Zpět"
+actions.next: "Načíst další"
+actions.endOfList: "Konec seznamu"
+actions.loadVideos: "Načíst videa"
+actions.openFolder: "Otevřít složku"
+actions.page: "stránka {num}"
+actions.loading: "Načítání..."
+
+# Empty states
+empty.videos: "Žádná videa"
+empty.loadVideos: "Klikněte na \"Obnovit\" pro načtení videí"
+empty.noNewVideos: "Žádná nová videa"
+empty.logs: "Žádné logy"
+empty.myVideos: "Žádná videa k zobrazení"
+empty.myVideosHelp: "Klikněte na tlačítko \"Načíst videa\" pro zobrazení vašich nahraných videí"
+
+# Accounts
+accounts.addAccount: "Přidat účet"
+accounts.email: "Email"
+accounts.password: "Heslo"
+accounts.login: "Přihlásit se"
+accounts.logout: "Odhlásit se"
+accounts.active: "Aktivní"
+accounts.inactive: "Neaktivní"
+accounts.status: "Stav"
+accounts.connected: "Připojeno"
+accounts.disconnected: "Odpojeno"
+accounts.accounts: "Účty"
+accounts.noAccounts: "Žádné účty nenalezeny"
+
+# Navigation
+nav.videos: "Videa"
+nav.process: "Process"
+nav.logs: "Logy"
+nav.settings: "Nastavení"
+nav.myVideos: "Moje videa"
+
+# Stats
+stats.points: "{count} bodů"

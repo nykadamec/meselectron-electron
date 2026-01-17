@@ -88,5 +88,36 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   removeListener: function(channel, callback) {
     ipcRenderer.removeListener(channel, callback)
+  },
+
+  // Updater API
+  updaterCheck: function() {
+    return ipcRenderer.invoke('updater:check')
+  },
+  updaterDownload: function(url) {
+    return ipcRenderer.invoke('updater:download', url)
+  },
+  updaterInstall: function() {
+    return ipcRenderer.invoke('updater:install')
+  },
+  updaterCancel: function() {
+    return ipcRenderer.send('updater:cancel')
+  },
+  updaterClear: function() {
+    return ipcRenderer.invoke('updater:clear')
+  },
+  updaterGetCurrentVersion: function() {
+    return ipcRenderer.invoke('updater:get-current-version')
+  },
+  updaterGetProgress: function() {
+    return ipcRenderer.invoke('updater:get-progress')
+  },
+  onUpdaterProgress: function(callback) {
+    ipcRenderer.on('updater:progress', callback)
+  },
+
+  // i18n API
+  readLocaleFile: function(locale: 'en' | 'cz') {
+    return ipcRenderer.invoke('locale:read', locale)
   }
 })

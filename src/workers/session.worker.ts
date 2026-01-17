@@ -4,7 +4,6 @@ import { parentPort } from 'worker_threads'
 import axios from 'axios'
 import { chromium } from 'playwright'
 import { readFile, writeFile, readdir } from 'fs/promises'
-import { existsSync } from 'fs'
 import path from 'path'
 
 interface SessionState {
@@ -83,31 +82,11 @@ async function isSessionValid(cookies: string): Promise<boolean> {
 
 /**
  * Get project root directory
+ * Uses OS-specific user data path: %APPDATA%\prehrajto-autopilot (Windows) or ~/Library/Application Support/prehrajto-autopilot (macOS)
  */
 function getProjectRoot(): string {
-  // For bundled app, use process.execPath to find the app location
-  const execDir = path.dirname(process.execPath)
-  const dataPath = path.join(execDir, 'DATA')
-  if (existsSync(dataPath)) {
-    return execDir
-  }
-
-  // For development: check current working directory
-  const cwd = process.cwd()
-  if (cwd !== execDir) {
-    const cwdDataPath = path.join(cwd, 'DATA')
-    if (existsSync(cwdDataPath)) {
-      return cwd
-    }
-
-    // Check parent directory (for development)
-    const parentDataPath = path.join(cwd, '..', 'DATA')
-    if (existsSync(parentDataPath)) {
-      return path.join(cwd, '..')
-    }
-  }
-
-  return execDir
+  const userDataPath = process.env.APPDATA || path.join(process.env.HOME || '', 'Library/Application Support')
+  return path.join(userDataPath, 'prehrajto-autopilot')
 }
 
 

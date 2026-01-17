@@ -102,8 +102,8 @@ interface AppState {
   updateStats: (updates: Partial<GlobalStats>) => void
 
   // UI State
-  activeTab: 'videa' | 'downloads' | 'logs' | 'settings' | 'myvideos'
-  setActiveTab: (tab: 'videa' | 'downloads' | 'logs' | 'settings' | 'myvideos') => void
+  activeTab: 'videos' | 'downloads' | 'logs' | 'settings' | 'myvideos'
+  setActiveTab: (tab: 'videos' | 'downloads' | 'logs' | 'settings' | 'myvideos') => void
 
   // My Videos
   myVideos: MyVideo[]

@@ -18,6 +18,7 @@ import {
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import type { QueueItem } from '../types'
+import { useLocaleStore } from '../i18n'
 
 interface QueueListProps {
   queue: QueueItem[]
@@ -67,6 +68,8 @@ function SortableQueueItem({
   onKill?: (itemId: string) => void
   isActive: boolean
 }) {
+  const t = useLocaleStore(state => state.t)
+
   const {
     attributes,
     listeners,
@@ -97,11 +100,11 @@ function SortableQueueItem({
 
   const getStatusLabel = (status: string) => {
     switch (status) {
-      case 'active': return 'Zpracovává'
-      case 'completed': return 'Hotovo'
-      case 'failed': return 'Chyba'
-      case 'paused': return 'Pozastaveno'
-      case 'pending': return 'Čeká'
+      case 'active': return t('queue.active')
+      case 'completed': return t('queue.completed')
+      case 'failed': return t('queue.failed')
+      case 'paused': return t('queue.paused')
+      case 'pending': return t('queue.pending')
       default: return status
     }
   }
@@ -125,7 +128,7 @@ function SortableQueueItem({
               <button
                 onClick={() => onKill(item.id)}
                 className="cursor-grab active:cursor-grabbing p-1 text-error hover:text-error/80 transition-colors"
-                title="Zrušit stahování"
+                title={t('queue.cancel')}
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -152,9 +155,9 @@ function SortableQueueItem({
               {/* Phase label */}
               <div className="flex items-center gap-2">
                 <span className="text-xs font-medium text-accent">
-                  {item.phase === 'upload' ? '↑ Nahrávání ' :
-                   item.subPhase === 'assembling' ? '↓ Compiling chunks ' :
-                   '↓ Stahování '}
+                  {item.phase === 'upload' ? t('queue.uploadPhase') :
+                   item.subPhase === 'assembling' ? t('queue.assembling') :
+                   t('queue.downloadPhase')}
                   [{((item.phase === 'upload' ? item.uploadProgress : item.progress) || 0).toFixed(2)}%]
                 </span>
               </div>
@@ -199,7 +202,7 @@ function SortableQueueItem({
           <button
             onClick={() => onRemove(item.id)}
             className="p-1 text-text-muted hover:text-error transition-colors"
-            title="Odebrat z fronty"
+            title={t('queue.remove')}
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -227,6 +230,7 @@ export function QueueList({
 }: QueueListProps) {
   const [items, setItems] = useState(queue)
   const [activeId, setActiveId] = useState<string | null>(null)
+  const t = useLocaleStore(state => state.t)
 
   // Sync items with queue prop (including progress updates)
   useEffect(() => {
@@ -299,7 +303,7 @@ export function QueueList({
     <div className="space-y-2">
       {/* Queue stats */}
       <div className="flex justify-end items-center text-sm text-text-muted">
-        <span>{pendingCount} čeká | {failedCount} chybných</span>
+        <span>{t('queue.stats', { pending: String(pendingCount), failed: String(failedCount) })}</span>
       </div>
 
       {/* Queue items with drag & drop */}
@@ -332,22 +336,22 @@ export function QueueList({
         <div className="flex gap-2 mt-2">
           {onPause && !isQueuePaused && (
             <button onClick={onPause} className="btn-secondary text-xs px-3 py-1">
-              Pozastavit
+              {t('queue.pause')}
             </button>
           )}
           {onResume && isQueuePaused && (
             <button onClick={onResume} className="btn-secondary text-xs px-3 py-1">
-              Pokračovat
+              {t('queue.resume')}
             </button>
           )}
           {onRetry && failedCount > 0 && (
             <button onClick={onRetry} className="btn-secondary text-xs px-3 py-1">
-              Zkusit znovu ({failedCount})
+              {t('queue.retry', { count: String(failedCount) })}
             </button>
           )}
           {onCancel && items.length > 0 && (
             <button onClick={onCancel} className="btn-error text-xs px-3 py-1">
-              Zrušit frontu
+              {t('queue.cancelQueue')}
             </button>
           )}
         </div>

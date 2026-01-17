@@ -1,12 +1,12 @@
 import { useEffect, useState, useCallback } from 'react'
-import path from 'path'
+import * as ScrollArea from '@radix-ui/react-scroll-area'
+import * as Avatar from '@radix-ui/react-avatar'
+import * as Separator from '@radix-ui/react-separator'
 import { useAppStore, setOnQueueChange, loadProcessedFromDisk } from './store'
 import { initUpdaterStore } from './store/updater'
 import { initI18n, useLocaleStore } from './i18n'
 import { Header } from './components/Header'
-import { AccountCard } from './components/AccountCard'
 import { StatsPanel } from './components/StatsPanel'
-import { VideoCard } from './components/VideoCard'
 import { MyVideosCard } from './components/MyVideosCard'
 import { QueueList } from './components/QueueList'
 import { LogViewer } from './components/LogViewer'
@@ -15,6 +15,14 @@ import { Footer } from './components/Footer'
 import { VideoList } from './components/VideoList'
 import { UpdaterNotification } from './components/UpdaterNotification'
 import type { VideoCandidate } from './types'
+import {
+  Search,
+  Download,
+  Settings,
+  PlayCircle,
+  FileText,
+  Folder
+} from 'lucide-react'
 
 function App() {
   const localeStore = useLocaleStore()
@@ -27,8 +35,6 @@ function App() {
     setSettings,
     logs,
     addLog,
-    videos,
-    addVideo,
     updateVideo,
     queue,
     removeFromQueue,
@@ -40,17 +46,7 @@ function App() {
     isQueuePaused,
     stats,
     updateStats,
-    setIsProcessing,
-    isProcessing,
-    videoCandidates,
-    selectedCandidates,
-    isDiscovering,
-    discoverProgress,
-    discoverMessage,
     setVideoCandidates,
-    toggleCandidate,
-    selectAllCandidates,
-    clearCandidates,
     setDiscovering,
     myVideos,
     myVideosPage,
@@ -62,771 +58,236 @@ function App() {
   const [isLoading, setIsLoading] = useState(true)
   const [loginEmail, setLoginEmail] = useState<string | null>(null)
 
-  // Helper function to read cookies for an account
   const accountsReadCookies = async (accountId: string): Promise<string | null> => {
     if (!window.electronAPI) return null
     return window.electronAPI.accountsReadCookies(accountId)
   }
 
-  // Process next item in queue - defined early so it can be used in useEffect
   const processQueue = useCallback(() => {
     if (!window.electronAPI) return
-
-    // Always get fresh state from store
     const state = useAppStore.getState()
     const { isQueuePaused, queue, getActiveItem, updateQueueItem, getPendingCount, addLog } = state
-
-    // Check if paused
-    if (isQueuePaused) {
-      return
-    }
-
-    // Check if already processing something
-    const activeItem = getActiveItem()
-    if (activeItem) {
-      return
-    }
-
-    // Find next pending item
+    if (isQueuePaused) return
+    if (getActiveItem()) return
     const nextItem = queue.find(item => item.status === 'pending')
     if (!nextItem) {
       const pendingCount = getPendingCount()
       if (pendingCount === 0) {
-        addLog({
-          id: crypto.randomUUID(),
-          timestamp: new Date(),
-          level: 'info',
-          message: 'Fronta je prázdná',
-          source: 'queue'
-        })
+        addLog({ id: crypto.randomUUID(), timestamp: new Date(), level: 'info', message: 'Fronta je prázdná', source: 'queue' })
       }
       return
     }
-
-    // Mark as active
-    updateQueueItem(nextItem.id, {
-      status: 'active',
-      phase: 'download',
-      startedAt: new Date()
-    })
-
-    addLog({
-      id: crypto.randomUUID(),
-      timestamp: new Date(),
-      level: 'info',
-      message: `Zahájeno stahování: ${nextItem.video.title}`,
-      source: 'queue'
-    })
-
-    // Start the download
+    updateQueueItem(nextItem.id, { status: 'active', phase: 'download', startedAt: new Date() })
+    addLog({ id: crypto.randomUUID(), timestamp: new Date(), level: 'info', message: `Zahájeno stahování: ${nextItem.video.title}`, source: 'queue' })
     window.electronAPI.downloadStart({
       videoId: nextItem.video.id,
       url: nextItem.video.url,
       cookies: nextItem.cookies || '',
       hqProcessing: settings.hqProcessing
     }).catch((error) => {
-      addLog({
-        id: crypto.randomUUID(),
-        timestamp: new Date(),
-        level: 'error',
-        message: `Chyba při stahování ${nextItem.video.title}: ${error}`,
-        source: 'download'
-      })
-
-      // Mark as failed and continue with next
-      updateQueueItem(nextItem.id, {
-        status: 'failed',
-        error: String(error),
-        completedAt: new Date()
-      })
-
-      // Process next item
+      addLog({ id: crypto.randomUUID(), timestamp: new Date(), level: 'error', message: `Chyba při stahování ${nextItem.video.title}: ${error}`, source: 'download' })
+      updateQueueItem(nextItem.id, { status: 'failed', error: String(error), completedAt: new Date() })
       processQueue()
     })
-  }, [settings.hqProcessing])  // Re-create when settings change
+  }, [settings.hqProcessing, addLog])
 
-  // Kill active queue item
   const handleKillItem = useCallback((itemId: string) => {
     const state = useAppStore.getState()
     const { updateQueueItem } = state
-
     const item = state.queue.find(i => i.id === itemId)
     if (!item || item.status !== 'active') return
-
-    // Mark as failed
-    updateQueueItem(itemId, {
-      status: 'failed',
-      error: 'Uživatel zrušil',
-      completedAt: new Date()
-    })
-
-    // Stop download/upload if active
+    updateQueueItem(itemId, { status: 'failed', error: 'Uživatel zrušil', completedAt: new Date() })
     if (window.electronAPI) {
       window.electronAPI.downloadStop?.()
       window.electronAPI.uploadStop?.()
     }
-
-    // Continue with next item
     processQueue()
   }, [processQueue])
 
-  // Initialize app
   useEffect(() => {
     const initApp = async () => {
       if (!window.electronAPI) {
-        addLog({
-          id: crypto.randomUUID(),
-          timestamp: new Date(),
-          level: 'warning',
-          message: 'Aplikace běží mimo Electron prostředí',
-          source: 'app'
-        })
+        addLog({ id: crypto.randomUUID(), timestamp: new Date(), level: 'warning', message: 'Aplikace běží mimo Electron prostředí', source: 'app' })
         setIsLoading(false)
         return
       }
-
       try {
-        // Initialize i18n first
         await initI18n()
-        console.log('[i18n] Initialized with locale:', useLocaleStore.getState().locale)
-
         const loadedSettings = await window.electronAPI.settingsRead()
         setSettings(loadedSettings)
-
-        // Load persisted processed videos
         await loadProcessedFromDisk()
-
         const loadedAccounts = await window.electronAPI.accountsList()
         setAccounts(loadedAccounts)
-
-        // Auto-login for accounts with credentials but no cookies
-        // First, find accounts that need login
         const accountsNeedingLogin = loadedAccounts.filter((a: { needsLogin: boolean }) => a.needsLogin)
-        if (accountsNeedingLogin.length > 0) {
-          // Set login email for loading display
-          setLoginEmail(accountsNeedingLogin[0].email)
-        }
-
+        if (accountsNeedingLogin.length > 0) setLoginEmail(accountsNeedingLogin[0].email)
         const autoLoginResults = await window.electronAPI.accountsAutoLogin()
         if (autoLoginResults && autoLoginResults.length > 0) {
           const successful = autoLoginResults.filter((r: { success: boolean }) => r.success).length
-          addLog({
-            id: crypto.randomUUID(),
-            timestamp: new Date(),
-            level: successful > 0 ? 'success' : 'error',
-            message: `Auto-login: ${successful}/${autoLoginResults.length} účtů přihlášeno`,
-            source: 'app'
-          })
-          // Refresh accounts list after auto-login
+          addLog({ id: crypto.randomUUID(), timestamp: new Date(), level: successful > 0 ? 'success' : 'error', message: `Auto-login: ${successful}/${autoLoginResults.length} účtů přihlášeno`, source: 'app' })
           const refreshedAccounts = await window.electronAPI.accountsList()
           setAccounts(refreshedAccounts)
         }
         setLoginEmail(null)
-
         const platformInfo = await window.electronAPI.platformInfo()
         updateStats({ activeAccounts: loadedAccounts.length })
-
-        addLog({
-          id: crypto.randomUUID(),
-          timestamp: new Date(),
-          level: 'info',
-          message: `Aplikace spuštěna na ${platformInfo.platform}`,
-          source: 'app'
-        })
-
-        // Initialize updater (auto-check if enabled)
+        addLog({ id: crypto.randomUUID(), timestamp: new Date(), level: 'info', message: `Aplikace spuštěna na ${platformInfo.platform}`, source: 'app' })
         initUpdaterStore().catch(console.error)
-
         setIsLoading(false)
       } catch (error) {
-        addLog({
-          id: crypto.randomUUID(),
-          timestamp: new Date(),
-          level: 'error',
-          message: `Chyba při inicializaci: ${error}`,
-          source: 'app'
-        })
+        addLog({ id: crypto.randomUUID(), timestamp: new Date(), level: 'error', message: `Chyba při inicializaci: ${error}`, source: 'app' })
         setIsLoading(false)
       }
     }
-
     initApp()
   }, [])
 
-  // Set up queue processing callback (called from VideoList when items added)
   useEffect(() => {
-    setOnQueueChange(() => {
-      // Call processQueue when queue changes
-      processQueue()
-    })
+    setOnQueueChange(() => processQueue())
   }, [processQueue])
 
-  // Set up listeners for progress updates
   useEffect(() => {
     if (!window.electronAPI) return
-
     const handleDownloadProgress = (_event: unknown, data: unknown) => {
-      const progressData = data as {
-        type: string
-        status?: string
-        progress?: number
-        speed?: number
-        eta?: number
-        message?: string
-        error?: string
-        videoId?: string
-        size?: number
-        path?: string  // File path returned from successful download
-      }
-
-      // Debug: log all progress updates
-      console.log(
-        '[RENDERER-DOWNLOAD]',
-        'type:', progressData.type,
-        '| status:', progressData.status,
-        '| videoId:', progressData.videoId?.substring(0, 8),
-        '| progress:', progressData.progress?.toFixed(1) + '%',
-        '| speed:', progressData.speed ? (progressData.speed / 1024 / 1024).toFixed(1) + ' MB/s' : 'N/A',
-        '| error:', progressData.error || 'none',
-        '| success:', progressData.type === 'complete' && !progressData.error
-      )
-
-      if (progressData.videoId) {
-        // Determine status based on type and worker status
+      const d = data as { type: string; status?: string; progress?: number; speed?: number; eta?: number; message?: string; error?: string; videoId?: string; size?: number; path?: string }
+      if (d.videoId) {
         let newStatus: 'pending' | 'downloading' | 'processing' | 'uploading' | 'completed' | 'failed' | 'already-exists' | 'skipped' = 'downloading'
-
-        if (progressData.type === 'complete') {
-          // Check if completed with error or skipped
-          if (progressData.error) {
-            newStatus = progressData.status as 'failed' | 'already-exists' | 'skipped' || 'failed'
-          } else {
-            newStatus = 'completed'
-          }
-        } else if (progressData.type === 'error') {
-          newStatus = 'failed'
-        } else if (progressData.status) {
-          // Use status from worker (extracting, downloading, already-exists, skipped, etc.)
-          if (['extracting', 'checking-size', 'downloading', 'assembling', 'watermarking'].includes(progressData.status)) {
-            newStatus = 'downloading'
-          } else if (progressData.status === 'already-exists') {
-            newStatus = 'already-exists'
-          } else if (progressData.status === 'skipped') {
-            newStatus = 'skipped'
-          } else if (progressData.status === 'completed') {
-            newStatus = 'completed'
-          } else {
-            newStatus = progressData.status as typeof newStatus
-          }
-        }
-
-        // Build update object - only include size if provided
-        const videoUpdate: Record<string, unknown> = {
-          status: newStatus,
-          progress: progressData.progress || 0,
-          speed: progressData.speed,
-          eta: progressData.eta,
-          error: progressData.error
-        }
-        if (progressData.size) {
-          videoUpdate.size = progressData.size
-        }
-        updateVideo(progressData.videoId, videoUpdate)
-
-        // Sync progress to queue item
+        if (d.type === 'complete') newStatus = d.error ? (d.status as typeof newStatus) || 'failed' : 'completed'
+        else if (d.type === 'error') newStatus = 'failed'
+        else if (d.status && ['extracting', 'checking-size', 'downloading', 'assembling', 'watermarking'].includes(d.status)) newStatus = 'downloading'
+        else if (d.status === 'already-exists') newStatus = 'already-exists'
+        else if (d.status === 'skipped') newStatus = 'skipped'
+        else if (d.status === 'completed') newStatus = 'completed'
+        const videoUpdate: Record<string, unknown> = { status: newStatus, progress: d.progress || 0, speed: d.speed, eta: d.eta, error: d.error }
+        if (d.size) videoUpdate.size = d.size
+        updateVideo(d.videoId, videoUpdate)
         const { queue, updateQueueItem } = useAppStore.getState()
-        const queueItem = queue.find(item => item.video.id === progressData.videoId)
-        if (queueItem) {
-          // Only update download progress when in download phase
-          if (queueItem.phase === 'download') {
-            // Prevent progress from jumping backwards (parallel chunk downloads)
-            const currentProgress = queueItem.progress || 0
-            const newProgress = progressData.progress ?? 0
-            if (newProgress >= currentProgress || currentProgress === 0 || currentProgress === 100) {
-              updateQueueItem(queueItem.id, {
-                progress: progressData.progress,
-                speed: progressData.speed,
-                eta: progressData.eta,
-                size: progressData.size || queueItem.size,
-                subPhase: progressData.status === 'assembling' ? 'assembling' :
-                          progressData.status === 'watermarking' ? 'watermarking' : 'downloading'
-              })
-            }
+        const queueItem = queue.find(item => item.video.id === d.videoId)
+        if (queueItem && queueItem.phase === 'download') {
+          const currentProgress = queueItem.progress || 0
+          const newProgress = d.progress ?? 0
+          if (newProgress >= currentProgress || currentProgress === 0 || currentProgress === 100) {
+            updateQueueItem(queueItem.id, { progress: d.progress, speed: d.speed, eta: d.eta, size: d.size || queueItem.size, subPhase: d.status === 'assembling' ? 'assembling' : d.status === 'watermarking' ? 'watermarking' : 'downloading' })
           }
         }
-
-        // Handle queue completion - 2 phase system (download -> upload)
-        if (progressData.type === 'complete') {
+        if (d.type === 'complete') {
           const { queue, updateQueueItem, accounts } = useAppStore.getState()
-          const queueItem = queue.find(item => item.video.id === progressData.videoId)
-          if (queueItem) {
-            if (progressData.error) {
-              // Download failed
-              updateQueueItem(queueItem.id, {
-                status: 'failed',
-                error: progressData.error,
-                completedAt: new Date()
-              })
+          const q = queue.find(item => item.video.id === d.videoId)
+          if (q) {
+            if (d.error) {
+              updateQueueItem(q.id, { status: 'failed', error: d.error, completedAt: new Date() })
               processQueue()
             } else {
-              // Download successful - start upload phase
-              updateQueueItem(queueItem.id, {
-                phase: 'upload',
-                progress: 100,
-                uploadProgress: 0,
-                status: 'active'
-              })
-
-              addLog({
-                id: crypto.randomUUID(),
-                timestamp: new Date(),
-                level: 'info',
-                message: `Nahrávám: ${queueItem.video.title}`,
-                source: 'upload'
-              })
-
-              // Start upload
-              const account = accounts.find(a => a.id === queueItem.accountId)
-              if (account && progressData.path) {
-                // Read cookies from file first (FIX: was using cookiesFile path instead of actual cookies)
+              updateQueueItem(q.id, { phase: 'upload', progress: 100, uploadProgress: 0, status: 'active' })
+              addLog({ id: crypto.randomUUID(), timestamp: new Date(), level: 'info', message: `Nahrávám: ${q.video.title}`, source: 'upload' })
+              const account = accounts.find(a => a.id === q.accountId)
+              if (account && d.path) {
                 window.electronAPI.accountsReadCookies(account.id).then((cookies) => {
-                  window.electronAPI.uploadStart({
-                    filePath: progressData.path,
-                    cookies: cookies || undefined,
-                    videoId: queueItem.video.id
-                  }).catch((error) => {
-                    addLog({
-                      id: crypto.randomUUID(),
-                      timestamp: new Date(),
-                      level: 'error',
-                      message: `Chyba nahrávání ${queueItem.video.title}: ${error}`,
-                      source: 'upload'
-                    })
-                    updateQueueItem(queueItem.id, {
-                      status: 'failed',
-                      error: String(error),
-                      completedAt: new Date()
-                    })
+                  window.electronAPI.uploadStart({ filePath: d.path, cookies: cookies || undefined, videoId: q.video.id }).catch((error) => {
+                    addLog({ id: crypto.randomUUID(), timestamp: new Date(), level: 'error', message: `Chyba nahrávání ${q.video.title}: ${error}`, source: 'upload' })
+                    updateQueueItem(q.id, { status: 'failed', error: String(error), completedAt: new Date() })
                     processQueue()
                   })
                 }).catch((error) => {
-                  addLog({
-                    id: crypto.randomUUID(),
-                      timestamp: new Date(),
-                      level: 'error',
-                      message: `Chyba čtení cookies: ${error}`,
-                      source: 'upload'
-                    })
-                  updateQueueItem(queueItem.id, {
-                    status: 'failed',
-                    error: String(error),
-                    completedAt: new Date()
-                  })
+                  addLog({ id: crypto.randomUUID(), timestamp: new Date(), level: 'error', message: `Chyba čtení cookies: ${error}`, source: 'upload' })
+                  updateQueueItem(q.id, { status: 'failed', error: String(error), completedAt: new Date() })
                   processQueue()
                 })
               } else {
-                // No account or file path - mark as completed with error
-                updateQueueItem(queueItem.id, {
-                  status: 'failed',
-                  error: 'Chybí účet nebo cesta k souboru',
-                  completedAt: new Date()
-                })
+                updateQueueItem(q.id, { status: 'failed', error: 'Chybí účet nebo cesta k souboru', completedAt: new Date() })
                 processQueue()
               }
             }
           }
         }
       }
-
-      // Log status updates from worker
-      if (progressData.status && progressData.type !== 'progress') {
-        addLog({
-          id: crypto.randomUUID(),
-          timestamp: new Date(),
-          level: progressData.type === 'error' ? 'error' : 'info',
-          message: `[${progressData.status}]`,
-          source: 'download'
-        })
+      if (d.status && d.type !== 'progress') {
+        addLog({ id: crypto.randomUUID(), timestamp: new Date(), level: d.type === 'error' ? 'error' : 'info', message: `[${d.status}]`, source: 'download' })
       }
-
-      if (progressData.message) {
-        addLog({
-          id: crypto.randomUUID(),
-          timestamp: new Date(),
-          level: progressData.type === 'error' ? 'error' : 'info',
-          message: progressData.message,
-          source: 'download'
-        })
+      if (d.message) {
+        addLog({ id: crypto.randomUUID(), timestamp: new Date(), level: d.type === 'error' ? 'error' : 'info', message: d.message, source: 'download' })
       }
     }
-
     const handleUploadProgress = (_event: unknown, data: unknown) => {
-      const progressData = data as {
-        type: string
-        progress?: number
-        speed?: number
-        eta?: number
-        message?: string
-        error?: string
-        videoId?: string  // Track which video is uploading
-      }
-
-      // Helper to find upload item by video.id or fallback to active upload
+      const d = data as { type: string; progress?: number; speed?: number; eta?: number; message?: string; error?: string; videoId?: string }
       const findUploadItem = () => {
         const { queue } = useAppStore.getState()
-        if (progressData.videoId) {
-          return queue.find(item => item.video.id === progressData.videoId)
-        }
+        if (d.videoId) return queue.find(item => item.video.id === d.videoId)
         return queue.find(item => item.phase === 'upload' && item.status === 'active')
       }
-
-      // Sync upload progress to queue
-      if (progressData.progress !== undefined || progressData.speed !== undefined) {
+      if (d.progress !== undefined || d.speed !== undefined) {
+        const { updateQueueItem } = useAppStore.getState()
+        const uploadItem = findUploadItem()
+        if (uploadItem) updateQueueItem(uploadItem.id, { uploadProgress: d.progress, speed: d.speed, eta: d.eta })
+      }
+      if (d.type === 'complete') {
         const { updateQueueItem } = useAppStore.getState()
         const uploadItem = findUploadItem()
         if (uploadItem) {
-          updateQueueItem(uploadItem.id, {
-            uploadProgress: progressData.progress,
-            speed: progressData.speed,
-            eta: progressData.eta
-          })
-        }
-      }
-
-      // Handle upload completion
-      if (progressData.type === 'complete') {
-        const { updateQueueItem, queue } = useAppStore.getState()
-        console.log('[UI] complete received:', {
-          videoId: progressData.videoId,
-          queueVideoIds: queue.map(q => q.video.id)
-        })
-        const uploadItem = findUploadItem()
-        console.log('[UI] findUploadItem result:', uploadItem ? uploadItem.video.id : 'NOT FOUND')
-        if (uploadItem) {
-          if (progressData.error) {
-            updateQueueItem(uploadItem.id, {
-              status: 'failed',
-              error: progressData.error,
-              completedAt: new Date()
-            })
+          if (d.error) {
+            updateQueueItem(uploadItem.id, { status: 'failed', error: d.error, completedAt: new Date() })
           } else {
-            // Mark as completed and track in processed videos
-            updateQueueItem(uploadItem.id, {
-              status: 'completed',
-              progress: 100,
-              uploadProgress: 100,
-              completedAt: new Date()
-            })
-            // Add to processed videos set so it won't show in Discover
+            updateQueueItem(uploadItem.id, { status: 'completed', progress: 100, uploadProgress: 100, completedAt: new Date() })
             useAppStore.getState().addProcessedUrl(uploadItem.video.url)
           }
-          processQueue()  // Process next item in queue
+          processQueue()
         }
       }
-
-      if (progressData.message || progressData.error) {
-        addLog({
-          id: crypto.randomUUID(),
-          timestamp: new Date(),
-          level: progressData.type === 'error' ? 'error' : 'info',
-          message: progressData.message || progressData.error || '',
-          source: 'upload'
-        })
+      if (d.message || d.error) {
+        addLog({ id: crypto.randomUUID(), timestamp: new Date(), level: d.type === 'error' ? 'error' : 'info', message: d.message || d.error || '', source: 'upload' })
       }
     }
-
     const handleDiscoverProgress = (_event: unknown, data: unknown) => {
-      const progressData = data as {
-        type: string
-        progress?: number
-        message?: string
-        candidates?: VideoCandidate[]
-        scanned?: number
-        total?: number
-        found?: number
-        error?: string
-        success?: boolean
-      }
-
-      if (progressData.type === 'progress') {
-        setDiscovering(true, progressData.progress || 0, progressData.message || '')
-        if (progressData.message) {
-          addLog({
-            id: crypto.randomUUID(),
-            timestamp: new Date(),
-            level: 'info',
-            message: progressData.message,
-            source: 'discover'
-          })
+      const d = data as { type: string; progress?: number; message?: string; candidates?: VideoCandidate[]; error?: string; success?: boolean }
+      if (d.type === 'progress') {
+        setDiscovering(true, d.progress || 0, d.message || '')
+        if (d.message) addLog({ id: crypto.randomUUID(), timestamp: new Date(), level: 'info', message: d.message, source: 'discover' })
+      } else if (d.type === 'status') {
+        setDiscovering(true, d.progress || 0, d.message || '')
+      } else if (d.type === 'complete') {
+        setDiscovering(false, 100, d.success ? 'Hotovo' : 'Chyba')
+        if (d.success && d.candidates) {
+          setVideoCandidates(d.candidates)
+          addLog({ id: crypto.randomUUID(), timestamp: new Date(), level: 'success', message: `Nalezeno ${d.candidates.length} videí k stažení`, source: 'discover' })
         }
-      } else if (progressData.type === 'status') {
-        setDiscovering(true, progressData.progress || 0, progressData.message || '')
-      } else if (progressData.type === 'complete') {
-        setDiscovering(false, 100, progressData.success ? 'Hotovo' : 'Chyba')
-        if (progressData.success && progressData.candidates) {
-          setVideoCandidates(progressData.candidates)
-          addLog({
-            id: crypto.randomUUID(),
-            timestamp: new Date(),
-            level: 'success',
-            message: `Nalezeno ${progressData.candidates.length} videí k stažení`,
-            source: 'discover'
-          })
-        }
-        if (progressData.error) {
-          addLog({
-            id: crypto.randomUUID(),
-            timestamp: new Date(),
-            level: 'error',
-            message: `Chyba při vyhledávání: ${progressData.error}`,
-            source: 'discover'
-          })
-        }
+        if (d.error) addLog({ id: crypto.randomUUID(), timestamp: new Date(), level: 'error', message: `Chyba při vyhledávání: ${d.error}`, source: 'discover' })
       }
     }
-
     window.electronAPI.onDownloadProgress(handleDownloadProgress)
     window.electronAPI.onUploadProgress(handleUploadProgress)
     window.electronAPI.onDiscoverProgress(handleDiscoverProgress)
-
     return () => {
       window.electronAPI.removeListener('download:progress', handleDownloadProgress)
       window.electronAPI.removeListener('upload:progress', handleUploadProgress)
       window.electronAPI.removeListener('discover:progress', handleDiscoverProgress)
     }
-  }, [updateVideo, addLog, setVideoCandidates, setDiscovering])
+  }, [updateVideo, addLog, setVideoCandidates, setDiscovering, processQueue])
 
-  // Handler for downloading selected videos
-  const handleDownloadSelected = useCallback(async () => {
-    if (!window.electronAPI || selectedCandidates.length === 0 || accounts.length === 0) {
-      addLog({
-        id: crypto.randomUUID(),
-        timestamp: new Date(),
-        level: 'warning',
-        message: 'Nelze stáhnout - žádná videa vybrána',
-        source: 'app'
-      })
-      return
-    }
-
-    // Clear candidates to hide the video list
-    clearCandidates()
-
-    addLog({
-      id: crypto.randomUUID(),
-      timestamp: new Date(),
-      level: 'info',
-      message: `Přidávám ${selectedCandidates.length} videí do fronty`,
-      source: 'app'
-    })
-
-    // Get account cookies
-    const cookies = await window.electronAPI.accountsReadCookies(accounts[0].id)
-
-    // Get addToQueue from store
-    const { addToQueue } = useAppStore.getState()
-
-    // Add each selected video to the queue
-    for (const url of selectedCandidates) {
-      const candidate = videoCandidates.find(c => c.url === url)
-      if (candidate) {
-        const videoId = crypto.randomUUID()
-
-        // Create video entry
-        addVideo({
-          id: videoId,
-          title: candidate.title,
-          url: candidate.url,
-          status: 'pending',
-          progress: 0,
-          size: 0
-        })
-
-        // Add to queue
-        addToQueue({
-          id: crypto.randomUUID(),
-          type: 'download',
-          video: {
-            id: videoId,
-            title: candidate.title,
-            url: candidate.url,
-            status: 'pending',
-            progress: 0,
-            size: 0
-          },
-          accountId: accounts[0].id,
-          status: 'pending',
-          priority: useAppStore.getState().queue.length + 1,
-          cookies: cookies || '',
-          addedAt: new Date()
-        })
-      }
-    }
-
-    // Start processing queue
-    processQueue()
-
-    addLog({
-      id: crypto.randomUUID(),
-      timestamp: new Date(),
-      level: 'success',
-      message: `Přidáno ${selectedCandidates.length} videí do fronty`,
-      source: 'app'
-    })
-  }, [accounts, selectedCandidates, videoCandidates, addLog, clearCandidates])
-
-  // Handler for starting video discovery
-  const handleStartDownload = useCallback(async () => {
-    if (!window.electronAPI || accounts.length === 0) {
-      addLog({
-        id: crypto.randomUUID(),
-        timestamp: new Date(),
-        level: 'warning',
-        message: 'Nelze stáhnout - žádné účty',
-        source: 'app'
-      })
-      return
-    }
-
-    // Show info about settings
-    addLog({
-      id: crypto.randomUUID(),
-      timestamp: new Date(),
-      level: 'info',
-      message: `Vyhledávám videa: max ${settings.videoCount} kandidátů`,
-      source: 'app'
-    })
-
-    // Clear previous candidates
-    clearCandidates()
-
-    // Get account cookies
-    const cookies = await window.electronAPI.accountsReadCookies(accounts[0].id)
-
-    // Start discovery
-    setIsProcessing(true)
-    setDiscovering(true, 0, 'Začínám vyhledávání...')
-
-    try {
-      await window.electronAPI.discoverStart({
-        cookies: cookies || '',
-        count: settings.videoCount
-      })
-    } catch (error) {
-      addLog({
-        id: crypto.randomUUID(),
-        timestamp: new Date(),
-        level: 'error',
-        message: `Chyba při vyhledávání: ${error}`,
-        source: 'app'
-      })
-      setDiscovering(false, 0, '')
-      setIsProcessing(false)
-    }
-  }, [accounts, settings, addLog, clearCandidates, setDiscovering, setIsProcessing])
-
-  // Handler for selecting and uploading files
-  const handleUploadFiles = useCallback(async () => {
-    if (!window.electronAPI || accounts.length === 0) {
-      addLog({
-        id: crypto.randomUUID(),
-        timestamp: new Date(),
-        level: 'warning',
-        message: 'Nelze nahrát - žádné účty',
-        source: 'app'
-      })
-      return
-    }
-
-    try {
-      const filePaths = await window.electronAPI.filesSelectUpload()
-      if (filePaths.length === 0) return
-
-      setIsProcessing(true)
-      addLog({
-        id: crypto.randomUUID(),
-        timestamp: new Date(),
-        level: 'info',
-        message: `Vybráno ${filePaths.length} souborů k nahrání`,
-        source: 'upload'
-      })
-
-      // Get account cookies
-      const cookies = await window.electronAPI.accountsReadCookies(accounts[0].id)
-
-      // Upload each file
-      for (const filePath of filePaths) {
-        const fileName = filePath.split('/').pop() || 'unknown'
-
-        addLog({
-          id: crypto.randomUUID(),
-          timestamp: new Date(),
-          level: 'info',
-          message: `Nahrávání: ${fileName}`,
-          source: 'upload'
-        })
-
-        try {
-          await window.electronAPI.uploadStart({ filePath, cookies: cookies || undefined })
-          updateStats({ totalUploaded: stats.totalUploaded + 1 })
-
-          addLog({
-            id: crypto.randomUUID(),
-            timestamp: new Date(),
-            level: 'success',
-            message: `Nahráno: ${fileName}`,
-            source: 'upload'
-          })
-        } catch (error) {
-          addLog({
-            id: crypto.randomUUID(),
-            timestamp: new Date(),
-            level: 'error',
-            message: `Chyba při nahrávání ${fileName}: ${error}`,
-            source: 'upload'
-          })
-        }
-      }
-
-      setIsProcessing(false)
-    } catch (error) {
-      addLog({
-        id: crypto.randomUUID(),
-        timestamp: new Date(),
-        level: 'error',
-        message: `Chyba: ${error}`,
-        source: 'app'
-      })
-      setIsProcessing(false)
-    }
-  }, [accounts, updateStats, addLog, setIsProcessing])
-
-  // Handler for opening folder
   const handleOpenFolder = useCallback(async () => {
     if (!window.electronAPI) return
-
     const platformInfo = await window.electronAPI.platformInfo()
-    const videosPath = path.join(platformInfo.appPath, 'VIDEOS')
-
+    const videosPath = `${platformInfo.appPath}/VIDEOS`
     try {
       await window.electronAPI.filesOpenFolder(videosPath)
     } catch {
-      addLog({
-        id: crypto.randomUUID(),
-        timestamp: new Date(),
-        level: 'error',
-        message: 'Nelze otevřít složku',
-        source: 'app'
-      })
+      addLog({ id: crypto.randomUUID(), timestamp: new Date(), level: 'error', message: 'Nelze otevřít složku', source: 'app' })
     }
   }, [addLog])
 
+  const navItems = [
+    { id: 'videos', label: localeStore.t('nav.videos'), icon: Search },
+    { id: 'downloads', label: localeStore.t('nav.process'), icon: Download },
+    { id: 'logs', label: localeStore.t('nav.logs'), icon: FileText },
+    { id: 'settings', label: localeStore.t('nav.settings'), icon: Settings },
+    { id: 'myvideos', label: localeStore.t('nav.myVideos'), icon: PlayCircle }
+  ]
+
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-bg-main flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-12 h-12 border-4 border-accent border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-text-secondary">
-            {loginEmail ? `Logging in as ${loginEmail}...` : 'Načítání...'}
+      <div style={{ minHeight: '100vh', backgroundColor: 'var(--color-background-base)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ textAlign: 'center' }}>
+          <div className="spinner" style={{ margin: '0 auto 16px', width: 48, height: 48 }} />
+          <p style={{ color: 'var(--color-text-secondary)' }}>
+            {loginEmail ? `Přihlašování jako ${loginEmail}...` : 'Načítání...'}
           </p>
         </div>
       </div>
@@ -834,244 +295,143 @@ function App() {
   }
 
   return (
-    <div className="min-h-screen bg-bg-main text-text-primary flex flex-col">
+    <div style={{ minHeight: '100vh', backgroundColor: 'var(--color-background-base)', color: 'var(--color-text-primary)', display: 'flex', flexDirection: 'column' }}>
       <Header />
-
-      <main className="flex-1 flex overflow-hidden">
+      <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
         {/* Sidebar */}
-        <aside className="w-64 bg-bg-card border-r border-border flex flex-col relative">
-          {/* Scrollable Content */}
-          <div className="flex-1 overflow-y-auto custom-scrollbar">
-            {/* Accounts */}
-            <div className="p-4 border-b border-border">
-              <h3 className="text-sm font-medium text-text-secondary uppercase tracking-wider mb-3">
-                {localeStore.t('accounts.accounts')}
-              </h3>
-              <div className="space-y-2">
-                {accounts.map((account) => (
-                  <AccountCard key={account.id} account={account} />
-                ))}
-                {accounts.length === 0 && (
-                  <p className="text-sm text-text-muted">{localeStore.t('accounts.noAccounts')}</p>
-                )}
+        <aside style={{ width: 260, backgroundColor: 'var(--color-surface-base)', borderRight: '1px solid var(--color-border-base)', display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
+          <ScrollArea.Root style={{ flex: 1, overflow: 'hidden' }}>
+            <ScrollArea.Viewport style={{ width: '100%', height: '100%' }}>
+              <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 20 }}>
+                {/* Accounts Section - First */}
+                <div>
+                  <p style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 8, paddingLeft: 12 }}>{localeStore.t('accounts.accounts')}</p>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    {accounts.map((account) => (
+                      <div key={account.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', backgroundColor: 'var(--color-surface-elevated)', borderRadius: 8, border: '1px solid var(--color-border-base)', transition: 'border-color 0.15s ease' }}>
+                        <Avatar.Root style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 28, height: 28, borderRadius: '50%', backgroundColor: account.isActive ? 'var(--color-success)' : 'var(--color-text-muted)', overflow: 'hidden', flexShrink: 0 }}>
+                          <Avatar.Fallback style={{ fontSize: 12, fontWeight: 600, color: 'white' }}>{account.email[0].toUpperCase()}</Avatar.Fallback>
+                        </Avatar.Root>
+                        <div style={{ flex: 1, minWidth: 0, lineHeight: '15px'}}>
+                          <p style={{ fontSize: 13, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{account.email.split('@')[0]}</p>
+                          {account.credits !== undefined && (
+                            <span style={{ fontSize: 11, color: 'var(--color-accent-base)' }}>
+                              {account.credits} kred
+                            </span>
+                          )}
+                        </div>
+                        {account.isActive && <div style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: 'var(--color-success)', flexShrink: 0 }} />}
+                      </div>
+                    ))}
+                    {accounts.length === 0 && <p style={{ fontSize: 13, color: 'var(--color-text-muted)', paddingLeft: 12 }}>{localeStore.t('accounts.noAccounts')}</p>}
+                  </div>
+                </div>
+                <Separator.Root style={{ backgroundColor: 'var(--color-border-base)', height: 1 }} />
+
+                {/* Navigation Section - Second */}
+                <nav style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <p style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 4, paddingLeft: 12 }}>Navigace</p>
+                  {navItems.map((item) => (
+                    <button key={item.id} onClick={() => setActiveTab(item.id as typeof activeTab)} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 8, border: 'none', backgroundColor: activeTab === item.id ? 'var(--color-accent-muted)' : 'transparent', color: activeTab === item.id ? 'var(--color-accent-base)' : 'var(--color-text-secondary)', cursor: 'pointer', fontSize: 14, fontWeight: 500, transition: 'all 0.15s ease', textAlign: 'left' }}>
+                      <item.icon style={{ width: 18, height: 18 }} />
+                      {item.label}
+                      {activeTab === item.id && <div style={{ marginLeft: 'auto', width: 8, height: 8, borderRadius: '50%', backgroundColor: 'var(--color-accent-base)' }} />}
+                    </button>
+                  ))}
+                </nav>
+                <Separator.Root style={{ backgroundColor: 'var(--color-border-base)', height: 1 }} />
+
+                {/* Statistics Section - Enhanced */}
+                <div style={{ backgroundColor: 'var(--color-surface-elevated)', borderRadius: 10, padding: 12, border: '1px solid var(--color-border-base)' }}>
+                  <p style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 12 }}>Statistiky</p>
+                  <StatsPanel stats={stats} accounts={accounts} />
+                </div>
               </div>
-            </div>
-
-            {/* Stats */}
-            <div className="p-4 border-b border-border">
-              <StatsPanel stats={stats} accounts={accounts} />
-            </div>
-
-            {/* Spacer for fixed button */}
-            <div className="h-16 flex-shrink-0"></div>
-          </div>
-
-          {/* Actions - fixed at bottom of sidebar */}
-          <div className="absolute bottom-0 left-0 right-0 p-4 pb-8 border-t border-border bg-bg-card">
-            <button
-              onClick={handleOpenFolder}
-              className="btn-secondary w-full text-sm"
-            >
+            </ScrollArea.Viewport>
+            <ScrollArea.Scrollbar orientation="vertical" style={{ display: 'flex', width: 6, padding: 2, backgroundColor: 'transparent' }}>
+              <ScrollArea.Thumb style={{ flex: 1, backgroundColor: 'var(--color-border-base)', borderRadius: 3 }} />
+            </ScrollArea.Scrollbar>
+          </ScrollArea.Root>
+          <div style={{ padding: 16, borderTop: '1px solid var(--color-border-base)', backgroundColor: 'var(--color-surface-base)' }}>
+            <button onClick={handleOpenFolder} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, width: '100%', padding: '10px 16px', backgroundColor: 'var(--color-surface-elevated)', border: '1px solid var(--color-border-base)', borderRadius: 8, color: 'var(--color-text-primary)', fontSize: 13, fontWeight: 500, cursor: 'pointer', transition: 'all 0.15s ease' }}>
+              <Folder style={{ width: 16, height: 16 }} />
               {localeStore.t('actions.openFolder')}
             </button>
           </div>
         </aside>
 
         {/* Main Content */}
-        <div className="flex-1 flex flex-col min-h-0">
-          {/* Tabs */}
-          <div className="flex-shrink-0 flex border-b border-border bg-bg-card">
-            {[
-              { id: 'videos', label: localeStore.t('nav.videos') },
-              { id: 'downloads', label: localeStore.t('nav.process') },
-              { id: 'logs', label: localeStore.t('nav.logs') },
-              { id: 'settings', label: localeStore.t('nav.settings') },
-              { id: 'myvideos', label: localeStore.t('nav.myVideos') }
-            ].map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id as typeof activeTab)}
-                className={`px-4 py-3 text-sm font-medium transition-colors border-b-2 -mb-px ${
-                  activeTab === tab.id
-                    ? 'border-accent text-accent'
-                    : 'border-transparent text-text-secondary hover:text-text-primary'
-                }`}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
-
-          {/* Tab Content - scroll only in content area */}
-          <div className="flex-1 overflow-y-auto custom-scrollbar">
-            <div className="p-4 pb-14">
-              {activeTab === 'videos' && (
-                <VideoList />
-              )}
-
-            {activeTab === 'downloads' && (
-              <div className="space-y-4">
-                {queue.length > 0 && (
-                  <div className="card">
-                    <h3 className="font-medium mb-3">Fronta ({queue.length})</h3>
-                    <QueueList
-                      queue={queue}
-                      isQueuePaused={isQueuePaused}
-                      onPause={pauseQueue}
-                      onResume={resumeQueue}
-                      onCancel={clearQueue}
-                      onRetry={retryFailedItems}
-                      onRemove={removeFromQueue}
-                      onReorder={reorderQueue}
-                      onKill={handleKillItem}
-                    />
+        <main style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden' }}>
+          <ScrollArea.Root style={{ flex: 1, overflow: 'hidden' }}>
+            <ScrollArea.Viewport style={{ width: '100%', height: '100%' }}>
+              <div style={{ padding: 24, paddingBottom: 80 }}>
+                {activeTab === 'videos' && <VideoList />}
+                {activeTab === 'downloads' && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                    {queue.length > 0 && (
+                      <div className="card-base">
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                          <h3 style={{ fontWeight: 600, fontSize: 16 }}>Fronta ({queue.length})</h3>
+                          <div style={{ display: 'flex', gap: 8 }}>
+                            {isQueuePaused ? <button onClick={resumeQueue} className="btn-secondary" style={{ fontSize: 13, padding: '6px 12px' }}>Pokračovat</button> : <button onClick={pauseQueue} className="btn-secondary" style={{ fontSize: 13, padding: '6px 12px' }}>Pozastavit</button>}
+                            {queue.some(item => item.status === 'failed') && <button onClick={retryFailedItems} className="btn-secondary" style={{ fontSize: 13, padding: '6px 12px' }}>Zkusit znovu</button>}
+                            <button onClick={clearQueue} className="btn-secondary" style={{ fontSize: 13, padding: '6px 12px', color: 'var(--color-error)' }}>Vyčistit</button>
+                          </div>
+                        </div>
+                        <QueueList queue={queue} isQueuePaused={isQueuePaused} onPause={pauseQueue} onResume={resumeQueue} onCancel={clearQueue} onRetry={retryFailedItems} onRemove={removeFromQueue} onReorder={reorderQueue} onKill={handleKillItem} />
+                      </div>
+                    )}
+                    {queue.length === 0 && (
+                      <div style={{ textAlign: 'center', padding: '48px 24px', backgroundColor: 'var(--color-surface-base)', borderRadius: 12, border: '1px dashed var(--color-border-base)' }}>
+                        <div style={{ width: 48, height: 48, margin: '0 auto 16px', borderRadius: '50%', backgroundColor: 'var(--color-surface-elevated)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <Download style={{ width: 24, height: 24, color: 'var(--color-text-muted)' }} />
+                        </div>
+                        <p style={{ color: 'var(--color-text-secondary)', marginBottom: 8 }}>Prázdná fronta</p>
+                        <p style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>Přidejte videa z karty "Objevit videa"</p>
+                      </div>
+                    )}
                   </div>
                 )}
-
-                {/* Queue empty state */}
-                {queue.length === 0 && (
-                  <div className="text-center py-12">
-                    <p className="text-text-muted">Prázdná fronta</p>
-                    <p className="text-xs text-text-muted mt-2">Přidejte videa z karty "Videa"</p>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {activeTab === 'logs' && (
-              <LogViewer logs={logs} />
-            )}
-
-            {activeTab === 'settings' && (
-              <SettingsPanel />
-            )}
-
-            {activeTab === 'myvideos' && (
-              <div className="space-y-4">
-                <div className="flex justify-between items-center">
-                  <h2 className="text-lg font-medium">{localeStore.t('nav.myVideos')}</h2>
-                  <button
-                    onClick={() => {
-                      // Load first page with first active account's cookies
-                      const activeAccount = accounts.find(acc => acc.isActive)
-                      if (activeAccount) {
-                        accountsReadCookies(activeAccount.id).then(cookies => {
-                          if (cookies) {
-                            useAppStore.getState().clearMyVideos()
-                            useAppStore.getState().loadMyVideos(1, cookies)
-                          }
-                        })
-                      }
-                    }}
-                    disabled={isLoadingMyVideos || accounts.length === 0}
-                    className="btn-primary disabled:opacity-50"
-                  >
-                    {isLoadingMyVideos ? localeStore.t('progress.loading') : localeStore.t('actions.loadVideos')}
-                  </button>
-                </div>
-
-                {myVideosError && (
-                  <div className="p-4 bg-error/10 border border-error rounded-lg">
-                    <p className="text-error text-sm">{myVideosError}</p>
-                  </div>
-                )}
-
-                {myVideos.length > 0 && (
-                  <div className="card">
-                    <div className="space-y-1">
-                      {myVideos.map((video) => (
-                        <MyVideosCard key={video.id} video={video} />
-                      ))}
+                {activeTab === 'logs' && <LogViewer logs={logs} />}
+                {activeTab === 'settings' && <SettingsPanel />}
+                {activeTab === 'myvideos' && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <h2 style={{ fontSize: 18, fontWeight: 600 }}>{localeStore.t('nav.myVideos')}</h2>
+                      <button onClick={() => { const activeAccount = accounts.find(acc => acc.isActive); if (activeAccount) { accountsReadCookies(activeAccount.id).then(cookies => { if (cookies) { useAppStore.getState().clearMyVideos(); useAppStore.getState().loadMyVideos(1, cookies) } }) } }} disabled={isLoadingMyVideos || accounts.length === 0} className="btn-primary" style={{ opacity: (isLoadingMyVideos || accounts.length === 0) ? 0.5 : 1 }}>
+                        {isLoadingMyVideos ? localeStore.t('progress.loading') : localeStore.t('actions.loadVideos')}
+                      </button>
                     </div>
-                  </div>
-                )}
-
-                {myVideos.length === 0 && !isLoadingMyVideos && (
-                  <div className="text-center py-12">
-                    <p className="text-text-muted">{localeStore.t('empty.myVideos')}</p>
-                    <p className="text-xs text-text-muted mt-2">{localeStore.t('empty.myVideosHelp')}</p>
-                  </div>
-                )}
-
-                {isLoadingMyVideos && (
-                  <div className="flex justify-center py-8">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-accent" />
-                  </div>
-                )}
-
-                {myVideos.length > 0 && myVideosHasMore && !isLoadingMyVideos && (
-                  <div className="flex justify-center gap-4">
-                    {myVideosPage > 1 && (
-                      <button
-                        onClick={() => {
-                          const activeAccount = accounts.find(acc => acc.isActive)
-                          if (activeAccount) {
-                            accountsReadCookies(activeAccount.id).then(cookies => {
-                              if (cookies) {
-                                const prevPage = myVideosPage - 1
-                                useAppStore.getState().loadMyVideos(prevPage, cookies)
-                              }
-                            })
-                          }
-                        }}
-                        className="btn-secondary"
-                      >
-                        {localeStore.t('actions.back')} ({localeStore.t('actions.page', { num: String(myVideosPage - 1) })})
-                      </button>
+                    {myVideosError && <div style={{ padding: 16, backgroundColor: 'rgb(239 68 68 / 0.1)', border: '1px solid var(--color-error)', borderRadius: 8 }}><p style={{ color: 'var(--color-error)', fontSize: 14 }}>{myVideosError}</p></div>}
+                    {myVideos.length > 0 && (
+                      <div className="card-base">
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>{myVideos.map((video) => <MyVideosCard key={video.id} video={video} />)}</div>
+                      </div>
                     )}
-                    <button
-                      onClick={() => {
-                        const activeAccount = accounts.find(acc => acc.isActive)
-                        if (activeAccount) {
-                          accountsReadCookies(activeAccount.id).then(cookies => {
-                            if (cookies) {
-                              const nextPage = myVideosPage + 1
-                              useAppStore.getState().loadMyVideos(nextPage, cookies)
-                            }
-                          })
-                        }
-                      }}
-                      className="btn-secondary"
-                    >
-                      {localeStore.t('actions.next')} ({localeStore.t('actions.page', { num: String(myVideosPage + 1) })})
-                    </button>
-                  </div>
-                )}
-
-                {myVideos.length > 0 && !myVideosHasMore && (
-                  <div className="flex justify-center py-4 gap-4">
-                    {myVideosPage > 1 && (
-                      <button
-                        onClick={() => {
-                          const activeAccount = accounts.find(acc => acc.isActive)
-                          if (activeAccount) {
-                            accountsReadCookies(activeAccount.id).then(cookies => {
-                              if (cookies) {
-                                const prevPage = myVideosPage - 1
-                                useAppStore.getState().loadMyVideos(prevPage, cookies)
-                              }
-                            })
-                          }
-                        }}
-                        className="btn-secondary"
-                      >
-                        {localeStore.t('actions.back')} ({localeStore.t('actions.page', { num: String(myVideosPage - 1) })})
-                      </button>
+                    {myVideos.length === 0 && !isLoadingMyVideos && (
+                      <div style={{ textAlign: 'center', padding: '48px 24px', backgroundColor: 'var(--color-surface-base)', borderRadius: 12, border: '1px dashed var(--color-border-base)' }}>
+                        <p style={{ color: 'var(--color-text-secondary)' }}>{localeStore.t('empty.myVideos')}</p>
+                        <p style={{ fontSize: 13, color: 'var(--color-text-muted)', marginTop: 8 }}>{localeStore.t('empty.myVideosHelp')}</p>
+                      </div>
                     )}
-                    <p className="text-xs text-text-muted self-center">{localeStore.t('actions.endOfList')}</p>
+                    {isLoadingMyVideos && <div style={{ display: 'flex', justifyContent: 'center', padding: 24 }}><div className="spinner" /></div>}
+                    {myVideos.length > 0 && myVideosHasMore && !isLoadingMyVideos && (
+                      <div style={{ display: 'flex', justifyContent: 'center', gap: 16 }}>
+                        {myVideosPage > 1 && <button onClick={() => { const activeAccount = accounts.find(acc => acc.isActive); if (activeAccount) { accountsReadCookies(activeAccount.id).then(cookies => { if (cookies) { const prevPage = myVideosPage - 1; useAppStore.getState().loadMyVideos(prevPage, cookies) } }) } }} className="btn-secondary">Zpět (stránka {myVideosPage - 1})</button>}
+                        <button onClick={() => { const activeAccount = accounts.find(acc => acc.isActive); if (activeAccount) { accountsReadCookies(activeAccount.id).then(cookies => { if (cookies) { const nextPage = myVideosPage + 1; useAppStore.getState().loadMyVideos(nextPage, cookies) } }) } }} className="btn-secondary">Další (stránka {myVideosPage + 1})</button>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
-            )}
-            </div>
-          </div>
-
-          {/* Footer - always visible */}
+            </ScrollArea.Viewport>
+            <ScrollArea.Scrollbar orientation="vertical" style={{ display: 'flex', width: 6, padding: 2, backgroundColor: 'transparent' }}>
+              <ScrollArea.Thumb style={{ flex: 1, backgroundColor: 'var(--color-border-base)', borderRadius: 3 }} />
+            </ScrollArea.Scrollbar>
+          </ScrollArea.Root>
           <Footer />
-        </div>
-      </main>
-
-      {/* Updater notification overlay */}
+        </main>
+      </div>
       <UpdaterNotification />
     </div>
   )

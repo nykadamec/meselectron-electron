@@ -8,26 +8,26 @@ export default {
   theme: {
     extend: {
       colors: {
-        // Dark theme palette
+        // Dark theme palette - using CSS variables for consistency
         bg: {
-          main: '#0b0b0b',
-          card: '#121212',
-          header: '#121212',
-          hover: '#1e1e1e'
+          main: 'var(--color-background-base)',
+          card: 'var(--color-surface-base)',
+          header: 'var(--color-surface-base)',
+          hover: 'var(--color-surface-elevated)'
         },
         accent: {
-          DEFAULT: '#2563eb',
-          hover: '#1d4ed8'
+          DEFAULT: 'var(--color-accent-base)',
+          hover: 'var(--color-accent-hover)'
         },
-        success: '#10b981',
-        warning: '#f59e0b',
-        error: '#ef4444',
+        success: 'var(--color-success)',
+        warning: 'var(--color-warning)',
+        error: 'var(--color-error)',
         text: {
-          primary: '#ffffff',
-          secondary: '#a1a1aa',
-          muted: '#71717a'
+          primary: 'var(--color-text-primary)',
+          secondary: 'var(--color-text-secondary)',
+          muted: 'var(--color-text-muted)'
         },
-        border: '#27272a'
+        border: 'var(--color-border-base)'
       },
       fontFamily: {
         sans: ['Inter', 'system-ui', 'sans-serif']

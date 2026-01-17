@@ -90,11 +90,11 @@ function SortableQueueItem({
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'active': return 'bg-accent animate-pulse'
-      case 'completed': return 'bg-success'
-      case 'failed': return 'bg-error'
-      case 'paused': return 'bg-warning'
-      default: return 'bg-text-muted'
+      case 'active': return 'var(--color-accent-base)'
+      case 'completed': return 'var(--color-success)'
+      case 'failed': return 'var(--color-error)'
+      case 'paused': return 'var(--color-warning)'
+      default: return 'var(--color-text-muted)'
     }
   }
 
@@ -109,109 +109,256 @@ function SortableQueueItem({
     }
   }
 
+  const statusColor = getStatusColor(item.status)
+
+  // Calculate progress percentage
+  const progressPercent = item.phase === 'upload' ? (item.uploadProgress || 0) : (item.progress || 0)
+
   return (
     <div
       ref={setNodeRef}
-      style={style}
-      className={`p-3 bg-bg-main rounded-lg border-l-2 ${
-        item.status === 'active' ? 'border-accent' :
-        item.status === 'failed' ? 'border-error' :
-        item.status === 'completed' ? 'border-success' :
-        'border-border'
-      } ${isDragging ? 'shadow-lg ring-2 ring-accent' : ''}`}
+      style={{
+        ...style,
+        backgroundColor: 'var(--color-surface-elevated)',
+        borderRadius: 10,
+        border: '1px solid var(--color-border-base)',
+        borderLeft: `4px solid ${statusColor}`,
+        padding: 14,
+        marginBottom: 8,
+        transition: 'all 0.15s ease'
+      }}
+      className={isDragging ? 'shadow-lg ring-2 ring-accent' : ''}
     >
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-1">
-            {/* Drag handle or Kill button */}
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          {/* Title row */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+            {/* Status indicator or Drag handle/Kill button */}
             {item.status === 'active' && onKill ? (
               <button
                 onClick={() => onKill(item.id)}
-                className="cursor-grab active:cursor-grabbing p-1 text-error hover:text-error/80 transition-colors"
+                style={{
+                  padding: 4,
+                  backgroundColor: 'transparent',
+                  border: 'none',
+                  borderRadius: 4,
+                  cursor: 'pointer',
+                  color: 'var(--color-error)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  transition: 'background-color 0.15s ease'
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgb(239 68 68 / 0.15)'}
+                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
                 title={t('queue.cancel')}
               >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg style={{ width: 14, height: 14 }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
             ) : (
               <button
-                className="cursor-grab active:cursor-grabbing p-1 text-text-muted hover:text-text-primary transition-colors"
+                style={{
+                  padding: 4,
+                  backgroundColor: 'transparent',
+                  border: 'none',
+                  borderRadius: 4,
+                  cursor: 'grab',
+                  color: 'var(--color-text-muted)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  transition: 'all 0.15s ease'
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.color = 'var(--color-text-primary)'}
+                onMouseLeave={(e) => e.currentTarget.style.color = 'var(--color-text-muted)'}
                 {...attributes}
                 {...listeners}
               >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg style={{ width: 14, height: 14 }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8h16M4 16h16" />
                 </svg>
               </button>
             )}
-            <div className={`w-2 h-2 rounded-full ${getStatusColor(item.status)}`} />
-            <p className="text-sm font-medium truncate">{item.video.title}</p>
+
+            {/* Animated status dot for active items */}
+            {item.status === 'active' && (
+              <div style={{
+                width: 8,
+                height: 8,
+                borderRadius: '50%',
+                backgroundColor: statusColor,
+                animation: 'pulse 2s infinite',
+                flexShrink: 0
+              }} />
+            )}
+
+            {/* Size indicator */}
+            {item.size && (
+              <span style={{
+                fontSize: 11,
+                color: 'var(--color-text-muted)',
+                fontFamily: 'monospace',
+                backgroundColor: 'var(--color-surface-base)',
+                padding: '2px 6px',
+                borderRadius: 4
+              }}>
+                [{formatSize(item.size)}]
+              </span>
+            )}
+
+            {/* Title */}
+            <span style={{
+              fontSize: 13,
+              fontWeight: 500,
+              color: 'var(--color-text-primary)',
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis'
+            }}>
+              {item.video.title}
+            </span>
           </div>
 
           {/* Active item details */}
           {item.status === 'active' && (
-            <div className="space-y-1 mt-2 ml-6">
-              {/* Phase label */}
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-medium text-accent">
+            <div style={{ paddingLeft: 26 }}>
+              {/* Phase and progress label */}
+              <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                marginBottom: 8
+              }}>
+                <span style={{
+                  fontSize: 12,
+                  color: 'var(--color-accent-base)',
+                  fontWeight: 500
+                }}>
                   {item.phase === 'upload' ? t('queue.uploadPhase') :
                    item.subPhase === 'assembling' ? t('queue.assembling') :
                    t('queue.downloadPhase')}
-                  [{((item.phase === 'upload' ? item.uploadProgress : item.progress) || 0).toFixed(2)}%]
+                </span>
+                <span style={{
+                  fontSize: 12,
+                  color: 'var(--color-accent-base)',
+                  fontWeight: 600
+                }}>
+                  {progressPercent.toFixed(1)}%
                 </span>
               </div>
 
-              {/* Progress bar */}
-              <div className="h-1.5 bg-bg-hover rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-accent rounded-full transition-all duration-300"
-                  style={{ width: `${item.phase === 'upload' ? (item.uploadProgress || 0) : (item.progress || 0)}%` }}
-                />
+              {/* Progress bar - VYŠŠÍ A VIDITELNĚJŠÍ */}
+              <div style={{
+                height: 10,
+                backgroundColor: 'var(--color-surface-base)',
+                borderRadius: 5,
+                overflow: 'hidden',
+                border: '1px solid var(--color-border-base)',
+                marginBottom: 10
+              }}>
+                <div style={{
+                  width: `${progressPercent}%`,
+                  height: '100%',
+                  backgroundColor: statusColor,
+                  borderRadius: 5,
+                  transition: 'width 0.3s ease'
+                }} />
               </div>
 
               {/* Status message */}
               {item.statusMessage && (
-                <div className="text-xs text-accent font-mono mt-1">
+                <div style={{
+                  fontSize: 11,
+                  color: 'var(--color-accent-base)',
+                  fontFamily: 'monospace',
+                  marginBottom: 8
+                }}>
                   {item.statusMessage}
                 </div>
               )}
 
               {/* Stats row */}
-              <div className="flex flex-wrap gap-3 text-xs text-text-muted">
+              <div style={{
+                display: 'flex',
+                gap: 16,
+                fontSize: 11,
+                color: 'var(--color-text-muted)'
+              }}>
                 <span>{formatSize(item.size)}</span>
                 <span>{formatSpeed(item.speed)}</span>
                 <span>ETA: {formatETA(item.eta)}</span>
-                <span className="capitalize">{getStatusLabel(item.status)}</span>
               </div>
             </div>
           )}
 
           {/* Pending/Other item details */}
           {item.status !== 'active' && (
-            <div className="flex flex-wrap gap-2 text-xs text-text-muted ml-6">
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 12,
+              paddingLeft: 26,
+              fontSize: 11,
+              color: 'var(--color-text-muted)'
+            }}>
               {item.size && <span>{formatSize(item.size)}</span>}
-              <span className="capitalize">{getStatusLabel(item.status)}</span>
-              {item.error && <span className="text-error">({item.error})</span>}
+              <span style={{
+                color: statusColor,
+                fontWeight: 500
+              }}>{getStatusLabel(item.status)}</span>
+              {item.error && (
+                <span style={{ color: 'var(--color-error)' }}>
+                  ({item.error})
+                </span>
+              )}
             </div>
           )}
         </div>
 
-        {/* Remove button (only for non-active pending/failed items) */}
-        {onRemove && item.status !== 'active' && (
-          <button
-            onClick={() => onRemove(item.id)}
-            className="p-1 text-text-muted hover:text-error transition-colors"
-            title={t('queue.remove')}
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        )}
+        {/* Right side - Priority number and Remove button */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{
+            fontSize: 11,
+            color: 'var(--color-text-muted)',
+            fontWeight: 500
+          }}>
+            #{item.priority}
+          </span>
 
-        {/* Priority number */}
-        <span className="text-xs text-text-muted">#{item.priority}</span>
+          {/* Remove button (only for non-active pending/failed items) */}
+          {onRemove && item.status !== 'active' && (
+            <button
+              onClick={() => onRemove(item.id)}
+              style={{
+                padding: 4,
+                backgroundColor: 'transparent',
+                border: 'none',
+                borderRadius: 4,
+                cursor: 'pointer',
+                color: 'var(--color-text-muted)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                transition: 'all 0.15s ease'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.color = 'var(--color-error)'
+                e.currentTarget.style.backgroundColor = 'rgb(239 68 68 / 0.1)'
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.color = 'var(--color-text-muted)'
+                e.currentTarget.style.backgroundColor = 'transparent'
+              }}
+              title={t('queue.remove')}
+            >
+              <svg style={{ width: 14, height: 14 }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          )}
+        </div>
       </div>
     </div>
   )

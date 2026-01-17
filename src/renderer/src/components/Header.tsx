@@ -1,5 +1,6 @@
 import { useAppStore } from '../store'
 import { useLocaleStore } from '../i18n'
+import { RefreshCw, Settings, Minus, UploadCloud } from 'lucide-react'
 
 export function Header() {
   const { isProcessing, addLog } = useAppStore()
@@ -47,49 +48,106 @@ export function Header() {
     }
   }
 
+  const handleMinimize = () => {
+    if (window.electronAPI?.windowMinimize) {
+      window.electronAPI.windowMinimize()
+    }
+  }
+
   return (
-    <header className="bg-bg-header border-b border-border px-4 py-3 flex items-center justify-between drag-region">
-      <div className="flex items-center gap-3">
-        <div className="w-8 h-8 bg-accent rounded-lg flex items-center justify-center">
-          <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-          </svg>
+    <header style={{
+      backgroundColor: 'var(--color-surface-base)',
+      borderBottom: '1px solid var(--color-border-base)',
+      padding: '12px 16px',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      WebkitAppRegion: 'drag'
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div style={{
+          width: 32,
+          height: 32,
+          backgroundColor: 'var(--color-accent-base)',
+          borderRadius: 8,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center'
+        }}>
+          <UploadCloud style={{ width: 18, height: 18, color: 'white' }} />
         </div>
         <div>
-          <h1 className="font-semibold text-text-primary">{t('header.title')}</h1>
-          <p className="text-xs text-text-muted">{t('header.subtitle')}</p>
+          <h1 style={{ fontWeight: 600, fontSize: 15, color: 'var(--color-text-primary)' }}>{t('header.title')}</h1>
+          <p style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>{t('header.subtitle')}</p>
         </div>
       </div>
 
-      <div className="flex items-center gap-2 no-drag">
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, WebkitAppRegion: 'no-drag' }}>
         {isProcessing && (
-          <span className="flex items-center gap-2 text-sm text-accent">
-            <span className="w-2 h-2 bg-accent rounded-full animate-pulse"></span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--color-accent-base)' }}>
+            <span style={{ width: 8, height: 8, backgroundColor: 'var(--color-accent-base)', borderRadius: '50%', animation: 'pulse 2s infinite' }}></span>
             {t('header.processing')}
           </span>
         )}
 
         <button
           onClick={handleRefresh}
-          className="p-2 hover:bg-bg-hover rounded-lg transition-colors"
+          style={{
+            padding: 8,
+            backgroundColor: 'transparent',
+            border: 'none',
+            borderRadius: 8,
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            transition: 'background-color 0.15s ease'
+          }}
+          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--color-surface-elevated)'}
+          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
           title={t('header.checkUpdates')}
         >
-          <svg className="w-5 h-5 text-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-          </svg>
+          <RefreshCw style={{ width: 16, height: 16, color: 'var(--color-text-secondary)' }} />
         </button>
 
-        <button className="p-2 hover:bg-bg-hover rounded-lg transition-colors" title={t('header.settings')}>
-          <svg className="w-5 h-5 text-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-          </svg>
+        <button
+          onClick={() => useAppStore.getState().setActiveTab('settings')}
+          style={{
+            padding: 8,
+            backgroundColor: 'transparent',
+            border: 'none',
+            borderRadius: 8,
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            transition: 'background-color 0.15s ease'
+          }}
+          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--color-surface-elevated)'}
+          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+          title={t('header.settings')}
+        >
+          <Settings style={{ width: 16, height: 16, color: 'var(--color-text-secondary)' }} />
         </button>
 
-        <button className="p-2 hover:bg-bg-hover rounded-lg transition-colors" title={t('header.minimize')}>
-          <svg className="w-5 h-5 text-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" />
-          </svg>
+        <button
+          onClick={handleMinimize}
+          style={{
+            padding: 8,
+            backgroundColor: 'transparent',
+            border: 'none',
+            borderRadius: 8,
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            transition: 'background-color 0.15s ease'
+          }}
+          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--color-surface-elevated)'}
+          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+          title={t('header.minimize')}
+        >
+          <Minus style={{ width: 16, height: 16, color: 'var(--color-text-secondary)' }} />
         </button>
       </div>
     </header>

@@ -129,6 +129,23 @@ export function SettingsPanel() {
           </label>
         </div>
 
+        {/* HQ Processing toggle */}
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="font-medium">HQ Processing</p>
+            <p className="text-sm text-text-muted">Pokud je HQ Processing zapnutý, process bude brát především odkazy na original video + kvalita</p>
+          </div>
+          <label className="relative inline-flex items-center cursor-pointer">
+            <input
+              type="checkbox"
+              checked={settings.hqProcessing}
+              onChange={(e) => setSettings({ ...settings, hqProcessing: e.target.checked })}
+              className="sr-only peer"
+            />
+            <div className="w-11 h-6 bg-bg-hover peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-accent"></div>
+          </label>
+        </div>
+
         {/* Download mode */}
         <div>
           <label className="block font-medium mb-2">Režim stahování</label>
@@ -198,7 +215,8 @@ export function SettingsPanel() {
             nospeed: false,
             addWatermark: true,
             outputDir: defaultOutputDir,
-            downloadMode: 'ffmpeg-chunks'
+            downloadMode: 'ffmpeg-chunks',
+            hqProcessing: true
           })}
           className="btn-secondary"
         >

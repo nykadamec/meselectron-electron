@@ -83,13 +83,14 @@ function callIpcHandler<T>(channel: string, args: unknown): Promise<T> {
  */
 async function extractVideoMetadata(url, cookies) {
   const videoId = workerData.payload.videoId
+  const hqProcessing = workerData.payload.hqProcessing
   sendProgress({ type: 'status', status: 'extracting', videoId })
 
   try {
-    console.log('[Download] [', videoId.substring(0, 8), '] Extracting metadata via IPC...')
+    console.log('[Download] [', videoId.substring(0, 8), '] Extracting metadata via IPC... (HQ:', hqProcessing, ')')
 
     // Call IPC handler in main process - it appends ?do=download and gets file size
-    const result = await callIpcHandler<{ mp4Url: string; fileSize: number }>('download:extract-metadata', { url, cookies })
+    const result = await callIpcHandler<{ mp4Url: string; fileSize: number }>('download:extract-metadata', { url, cookies, hqProcessing })
 
     const { mp4Url, fileSize } = result
     const fileSizeMB = fileSize / (1024 * 1024)

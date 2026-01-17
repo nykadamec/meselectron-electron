@@ -5,6 +5,7 @@ interface VideoCardProps {
   variant?: 'grid' | 'list'
   size?: number
   selected?: boolean
+  processed?: boolean
   onClick?: () => void
 }
 
@@ -30,7 +31,7 @@ const statusLabels = {
   skipped: 'Přeskočeno'
 }
 
-export function VideoCard({ video, variant = 'grid', size, selected, onClick }: VideoCardProps) {
+export function VideoCard({ video, variant = 'grid', size, selected, processed, onClick }: VideoCardProps) {
   const formatSize = (bytes?: number) => {
     if (!bytes) return 'N/A'
     const k = 1024
@@ -66,30 +67,39 @@ export function VideoCard({ video, variant = 'grid', size, selected, onClick }: 
   if (variant === 'list') {
     return (
       <div
-        className={`flex items-center gap-3 py-2 px-3 rounded-lg cursor-pointer transition-colors ${
-          selected
-            ? 'bg-accent/10 border border-accent'
-            : 'hover:bg-bg-hover border border-transparent'
+        className={`flex items-center gap-3 py-2 px-3 rounded-lg transition-colors ${
+          processed
+            ? 'opacity-50 bg-bg-hover'
+            : selected
+              ? 'bg-accent/10 border border-accent'
+              : 'hover:bg-bg-hover border border-transparent cursor-pointer'
         }`}
-        onClick={onClick}
+        onClick={processed ? undefined : onClick}
       >
-        <input
-          type="checkbox"
-          checked={selected ?? false}
-          onChange={onClick}
-          onClick={(e) => e.stopPropagation()}
-          className="flex-shrink-0"
-        />
+        {!processed && (
+          <input
+            type="checkbox"
+            checked={selected ?? false}
+            onChange={onClick}
+            onClick={(e) => e.stopPropagation()}
+            className="flex-shrink-0"
+          />
+        )}
         <div className="flex-1 min-w-0">
           <p className="font-medium text-sm truncate">{video.title}</p>
           {videoSize && (
             <p className="text-xs text-text-muted">{formatSize(videoSize)}</p>
           )}
         </div>
-        <div className="flex-shrink-0">
-          <svg className="w-5 h-5 text-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-          </svg>
+        <div className="flex-shrink-0 flex items-center gap-2">
+          {processed && (
+            <span className="text-xs text-success">Hotovo</span>
+          )}
+          {!processed && (
+            <svg className="w-5 h-5 text-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+          )}
         </div>
       </div>
     )
@@ -117,7 +127,9 @@ export function VideoCard({ video, variant = 'grid', size, selected, onClick }: 
         <div className="flex-1 min-w-0">
           <h4 className="text-sm font-medium truncate mb-1">{video.title}</h4>
           <div className="flex items-center gap-2 mb-2">
-            {isVideoCandidate ? (
+            {processed ? (
+              <span className="badge badge-success">Hotovo</span>
+            ) : isVideoCandidate ? (
               <span className="badge badge-info">Kandidát</span>
             ) : (
               <span className={`badge ${statusColors[videoStatus]}`}>

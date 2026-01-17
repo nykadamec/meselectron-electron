@@ -22,6 +22,7 @@ export interface Settings {
   addWatermark: boolean
   outputDir: string
   downloadMode: DownloadMode
+  hqProcessing: boolean
 }
 
 // Download configuration
@@ -100,6 +101,7 @@ export interface QueueItem {
   phase?: 'download' | 'upload'
   subPhase?: 'downloading' | 'assembling' | 'watermarking'
   uploadProgress?: number
+  statusMessage?: string
   addedAt: Date
   startedAt?: Date
   completedAt?: Date

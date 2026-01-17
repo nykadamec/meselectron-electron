@@ -1,6 +1,49 @@
 import { create } from 'zustand'
 import type { Account, Settings, Video, QueueItem, LogMessage, GlobalStats, VideoCandidate, MyVideo } from '../types'
 
+// Processed video persistence helpers
+let saveTimeout: ReturnType<typeof setTimeout> | null = null
+
+function saveProcessedToDisk() {
+  if (saveTimeout) {
+    clearTimeout(saveTimeout)
+  }
+  saveTimeout = setTimeout(async () => {
+    const state = useAppStore.getState()
+    const items: { url: string; status: string; timestamp: string }[] = []
+    state.processedVideoUrls.forEach(url => {
+      items.push({
+        url,
+        status: 'completed',
+        timestamp: new Date().toISOString()
+      })
+    })
+    try {
+      await window.electronAPI.processedWrite(items)
+    } catch (err) {
+      console.error('[Store] Failed to save processed videos:', err)
+    }
+  }, 500) // Debounce - wait 500ms after last change
+}
+
+export async function loadProcessedFromDisk() {
+  try {
+    const items = await window.electronAPI.processedRead()
+    const state = useAppStore.getState()
+    const newSet = new Set<string>()
+    items.forEach(item => newSet.add(item.url))
+    state.setProcessedVideos(newSet)
+  } catch (err) {
+    console.error('[Store] Failed to load processed videos:', err)
+  }
+}
+
+// Global callback for queue changes - set by App.tsx
+let onQueueChangeCallback: (() => void) | null = null
+export const setOnQueueChange = (callback: () => void) => {
+  onQueueChangeCallback = callback
+}
+
 interface AppState {
   // Accounts
   accounts: Account[]
@@ -59,8 +102,8 @@ interface AppState {
   updateStats: (updates: Partial<GlobalStats>) => void
 
   // UI State
-  activeTab: 'downloads' | 'uploads' | 'logs' | 'settings' | 'myvideos'
-  setActiveTab: (tab: 'downloads' | 'uploads' | 'logs' | 'settings' | 'myvideos') => void
+  activeTab: 'videa' | 'downloads' | 'logs' | 'settings' | 'myvideos'
+  setActiveTab: (tab: 'videa' | 'downloads' | 'logs' | 'settings' | 'myvideos') => void
 
   // My Videos
   myVideos: MyVideo[]
@@ -74,6 +117,13 @@ interface AppState {
   clearMyVideos: () => void
   isProcessing: boolean
   setIsProcessing: (processing: boolean) => void
+
+  // Processed Videos Tracking
+  processedVideoUrls: Set<string>
+  addProcessedUrl: (url: string) => void
+  setProcessedVideos: (urls: Set<string>) => void
+  isVideoProcessed: (url: string) => boolean
+  clearProcessedVideos: () => void
 }
 
 export const useAppStore = create<AppState>((set) => ({
@@ -125,7 +175,8 @@ export const useAppStore = create<AppState>((set) => ({
     nospeed: false,
     addWatermark: true,
     outputDir: '',
-    downloadMode: 'ffmpeg-chunks'
+    downloadMode: 'ffmpeg-chunks',
+    hqProcessing: true
   },
   setSettings: (settings) => set({ settings }),
 
@@ -186,6 +237,12 @@ export const useAppStore = create<AppState>((set) => ({
         item.status === 'failed' ? { ...item, status: 'pending' } : item
       )
     })),
+  triggerQueueProcess: () => {
+    // Call the global callback set by App.tsx
+    if (onQueueChangeCallback) {
+      onQueueChangeCallback()
+    }
+  },
 
   // Logs
   logs: [],
@@ -274,5 +331,26 @@ export const useAppStore = create<AppState>((set) => ({
     } finally {
       window.electronAPI.removeListener('myvideos:progress', progressHandler)
     }
+  },
+
+  // Processed Videos Tracking
+  processedVideoUrls: new Set(),
+  addProcessedUrl: (url) =>
+    set((state) => {
+      const newSet = new Set(state.processedVideoUrls)
+      newSet.add(url)
+      // Trigger persistence save
+      saveProcessedToDisk()
+      return { processedVideoUrls: newSet }
+    }),
+  setProcessedVideos: (urls) => set({ processedVideoUrls: urls }),
+  isVideoProcessed: (url) => {
+    const state = useAppStore.getState()
+    return state.processedVideoUrls.has(url)
+  },
+  clearProcessedVideos: () => {
+    set({ processedVideoUrls: new Set() })
+    // Trigger persistence save
+    saveProcessedToDisk()
   }
 }))

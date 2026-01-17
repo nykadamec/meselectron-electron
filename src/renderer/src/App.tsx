@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import path from 'path'
-import { useAppStore } from './store'
+import { useAppStore, setOnQueueChange, loadProcessedFromDisk } from './store'
 import { Header } from './components/Header'
 import { AccountCard } from './components/AccountCard'
 import { StatsPanel } from './components/StatsPanel'
@@ -10,6 +10,7 @@ import { QueueList } from './components/QueueList'
 import { LogViewer } from './components/LogViewer'
 import { SettingsPanel } from './components/SettingsPanel'
 import { Footer } from './components/Footer'
+import { VideoList } from './components/VideoList'
 import type { VideoCandidate } from './types'
 
 function App() {
@@ -63,6 +64,108 @@ function App() {
     return window.electronAPI.accountsReadCookies(accountId)
   }
 
+  // Process next item in queue - defined early so it can be used in useEffect
+  const processQueue = useCallback(() => {
+    if (!window.electronAPI) return
+
+    // Always get fresh state from store
+    const state = useAppStore.getState()
+    const { isQueuePaused, queue, getActiveItem, updateQueueItem, getPendingCount, addLog } = state
+
+    // Check if paused
+    if (isQueuePaused) {
+      return
+    }
+
+    // Check if already processing something
+    const activeItem = getActiveItem()
+    if (activeItem) {
+      return
+    }
+
+    // Find next pending item
+    const nextItem = queue.find(item => item.status === 'pending')
+    if (!nextItem) {
+      const pendingCount = getPendingCount()
+      if (pendingCount === 0) {
+        addLog({
+          id: crypto.randomUUID(),
+          timestamp: new Date(),
+          level: 'info',
+          message: 'Fronta je prázdná',
+          source: 'queue'
+        })
+      }
+      return
+    }
+
+    // Mark as active
+    updateQueueItem(nextItem.id, {
+      status: 'active',
+      phase: 'download',
+      startedAt: new Date()
+    })
+
+    addLog({
+      id: crypto.randomUUID(),
+      timestamp: new Date(),
+      level: 'info',
+      message: `Zahájeno stahování: ${nextItem.video.title}`,
+      source: 'queue'
+    })
+
+    // Start the download
+    window.electronAPI.downloadStart({
+      videoId: nextItem.video.id,
+      url: nextItem.video.url,
+      cookies: nextItem.cookies || '',
+      hqProcessing: settings.hqProcessing
+    }).catch((error) => {
+      addLog({
+        id: crypto.randomUUID(),
+        timestamp: new Date(),
+        level: 'error',
+        message: `Chyba při stahování ${nextItem.video.title}: ${error}`,
+        source: 'download'
+      })
+
+      // Mark as failed and continue with next
+      updateQueueItem(nextItem.id, {
+        status: 'failed',
+        error: String(error),
+        completedAt: new Date()
+      })
+
+      // Process next item
+      processQueue()
+    })
+  }, [settings.hqProcessing])  // Re-create when settings change
+
+  // Kill active queue item
+  const handleKillItem = useCallback((itemId: string) => {
+    const state = useAppStore.getState()
+    const { updateQueueItem } = state
+
+    const item = state.queue.find(i => i.id === itemId)
+    if (!item || item.status !== 'active') return
+
+    // Mark as failed
+    updateQueueItem(itemId, {
+      status: 'failed',
+      error: 'Uživatel zrušil',
+      completedAt: new Date()
+    })
+
+    // Stop download/upload if active
+    if (window.electronAPI) {
+      window.electronAPI.downloadStop?.()
+      window.electronAPI.uploadStop?.()
+    }
+
+    // Continue with next item
+    processQueue()
+  }, [processQueue])
+
   // Initialize app
   useEffect(() => {
     const initApp = async () => {
@@ -81,6 +184,9 @@ function App() {
       try {
         const loadedSettings = await window.electronAPI.settingsRead()
         setSettings(loadedSettings)
+
+        // Load persisted processed videos
+        await loadProcessedFromDisk()
 
         const loadedAccounts = await window.electronAPI.accountsList()
         setAccounts(loadedAccounts)
@@ -135,6 +241,14 @@ function App() {
 
     initApp()
   }, [])
+
+  // Set up queue processing callback (called from VideoList when items added)
+  useEffect(() => {
+    setOnQueueChange(() => {
+      // Call processQueue when queue changes
+      processQueue()
+    })
+  }, [processQueue])
 
   // Set up listeners for progress updates
   useEffect(() => {
@@ -384,12 +498,15 @@ function App() {
               completedAt: new Date()
             })
           } else {
+            // Mark as completed and track in processed videos
             updateQueueItem(uploadItem.id, {
               status: 'completed',
               progress: 100,
               uploadProgress: 100,
               completedAt: new Date()
             })
+            // Add to processed videos set so it won't show in Discover
+            useAppStore.getState().addProcessedUrl(uploadItem.video.url)
           }
           processQueue()  // Process next item in queue
         }
@@ -466,80 +583,6 @@ function App() {
       window.electronAPI.removeListener('discover:progress', handleDiscoverProgress)
     }
   }, [updateVideo, addLog, setVideoCandidates, setDiscovering])
-
-  // Process next item in queue
-  const processQueue = useCallback(() => {
-    if (!window.electronAPI) return
-
-    const { isQueuePaused, queue, getActiveItem, updateQueueItem, getPendingCount } = useAppStore.getState()
-
-    // Check if paused
-    if (isQueuePaused) {
-      return
-    }
-
-    // Check if already processing something
-    const activeItem = getActiveItem()
-    if (activeItem) {
-      return
-    }
-
-    // Find next pending item
-    const nextItem = queue.find(item => item.status === 'pending')
-    if (!nextItem) {
-      const pendingCount = getPendingCount()
-      if (pendingCount === 0) {
-        addLog({
-          id: crypto.randomUUID(),
-          timestamp: new Date(),
-          level: 'info',
-          message: 'Fronta je prázdná',
-          source: 'queue'
-        })
-      }
-      return
-    }
-
-    // Mark as active
-    updateQueueItem(nextItem.id, {
-      status: 'active',
-      phase: 'download',
-      startedAt: new Date()
-    })
-
-    addLog({
-      id: crypto.randomUUID(),
-      timestamp: new Date(),
-      level: 'info',
-      message: `Zahájeno stahování: ${nextItem.video.title}`,
-      source: 'queue'
-    })
-
-    // Start the download
-    window.electronAPI.downloadStart({
-      videoId: nextItem.video.id,
-      url: nextItem.video.url,
-      cookies: nextItem.cookies || ''
-    }).catch((error) => {
-      addLog({
-        id: crypto.randomUUID(),
-        timestamp: new Date(),
-        level: 'error',
-        message: `Chyba při stahování ${nextItem.video.title}: ${error}`,
-        source: 'download'
-      })
-
-      // Mark as failed and continue with next
-      updateQueueItem(nextItem.id, {
-        status: 'failed',
-        error: String(error),
-        completedAt: new Date()
-      })
-
-      // Process next item
-      processQueue()
-    })
-  }, [addLog])
 
   // Handler for downloading selected videos
   const handleDownloadSelected = useCallback(async () => {
@@ -807,21 +850,7 @@ function App() {
           </div>
 
           {/* Actions */}
-          <div className="p-4 space-y-2">
-            <button
-              onClick={handleStartDownload}
-              disabled={queue.length > 0}
-              className="btn-primary w-full text-sm disabled:opacity-50"
-            >
-              Stáhnout videa
-            </button>
-            <button
-              onClick={handleUploadFiles}
-              disabled={queue.length > 0}
-              className="btn-primary w-full text-sm disabled:opacity-50"
-            >
-              Nahrát videa
-            </button>
+          <div className="p-4 space-y-2 mt-auto">
             <button
               onClick={handleOpenFolder}
               className="btn-secondary w-full text-sm"
@@ -836,8 +865,8 @@ function App() {
           {/* Tabs */}
           <div className="flex border-b border-border bg-bg-card">
             {[
-              { id: 'downloads', label: 'Stahování' },
-              { id: 'uploads', label: 'Nahrávání' },
+              { id: 'videa', label: 'Videa' },
+              { id: 'downloads', label: 'Process' },
               { id: 'logs', label: 'Logy' },
               { id: 'settings', label: 'Nastavení' },
               { id: 'myvideos', label: 'Moje videa' }
@@ -856,8 +885,13 @@ function App() {
             ))}
           </div>
 
-          {/* Tab Content */}
-          <div className="flex-1 overflow-auto p-4">
+          {/* Tab Content - scroll only in content area */}
+          <div className="flex-1 overflow-y-auto custom-scrollbar">
+            <div className="p-4 pb-24"> {/* pb-24 for fixed footer */}
+              {activeTab === 'videa' && (
+                <VideoList />
+              )}
+
             {activeTab === 'downloads' && (
               <div className="space-y-4">
                 {queue.length > 0 && (
@@ -872,118 +906,16 @@ function App() {
                       onRetry={retryFailedItems}
                       onRemove={removeFromQueue}
                       onReorder={reorderQueue}
+                      onKill={handleKillItem}
                     />
                   </div>
                 )}
 
-                {/* Video Candidates Section */}
-                {videoCandidates.length > 0 && (
-                  <div className="card">
-                    <div className="flex justify-between items-center mb-3">
-                      <h3 className="font-medium">
-                        Nalezená videa ({selectedCandidates.length}/{videoCandidates.length} vybráno)
-                      </h3>
-                      <div className="flex gap-2">
-                        <button
-                          onClick={selectAllCandidates}
-                          className="btn-secondary text-sm"
-                        >
-                          Vybrat vše
-                        </button>
-                        <button
-                          onClick={clearCandidates}
-                          className="btn-secondary text-sm"
-                        >
-                          Vymazat
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Discovery progress bar */}
-                    {isDiscovering && (
-                      <div className="mb-4">
-                        <div className="flex justify-between text-sm mb-1">
-                          <span>{discoverMessage}</span>
-                          <span>{Math.round(discoverProgress)}%</span>
-                        </div>
-                        <div className="w-full bg-bg-hover rounded-full h-2">
-                          <div
-                            className="bg-accent h-2 rounded-full transition-all"
-                            style={{ width: `${discoverProgress}%` }}
-                          />
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Video candidates list */}
-                    <div className="space-y-1">
-                      {videoCandidates.map((candidate) => (
-                        <VideoCard
-                          key={candidate.url}
-                          video={candidate}
-                          variant="list"
-                          selected={selectedCandidates.includes(candidate.url)}
-                          onClick={() => toggleCandidate(candidate.url)}
-                        />
-                      ))}
-                    </div>
-
-                    {/* Download selected button */}
-                    {selectedCandidates.length > 0 && (
-                      <div className="mt-4 flex justify-end">
-                        <button onClick={handleDownloadSelected} className="btn-primary">
-                          Stáhnout vybraná ({selectedCandidates.length})
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* Completed videos - only show completed, not downloading */}
-                {videos.filter(v => v.status === 'completed' || v.status === 'failed' || v.status === 'already-exists' || v.status === 'skipped').length > 0 && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {videos
-                      .filter(v => v.status === 'completed' || v.status === 'failed' || v.status === 'already-exists' || v.status === 'skipped')
-                      .map((video) => (
-                        <VideoCard key={video.id} video={video} />
-                      ))}
-                  </div>
-                )}
-
-                {videos.filter(v => v.status === 'completed' || v.status === 'failed' || v.status === 'already-exists' || v.status === 'skipped').length === 0 && videoCandidates.length === 0 && !isDiscovering && (
+                {/* Queue empty state */}
+                {queue.length === 0 && (
                   <div className="text-center py-12">
-                    <p className="text-text-muted">Žádná dokončená videa</p>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {activeTab === 'uploads' && (
-              <div className="space-y-4">
-                <div className="flex justify-between items-center">
-                  <h2 className="text-lg font-medium">Nahrávání</h2>
-                  <button
-                    onClick={handleUploadFiles}
-                    disabled={isProcessing}
-                    className="btn-primary disabled:opacity-50"
-                  >
-                    Vybrat videa
-                  </button>
-                </div>
-
-                {videos.filter(v => v.status === 'uploading').length > 0 && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {videos
-                      .filter(v => v.status === 'uploading')
-                      .map((video) => (
-                        <VideoCard key={video.id} video={video} />
-                      ))}
-                  </div>
-                )}
-
-                {videos.filter(v => v.status === 'uploading').length === 0 && (
-                  <div className="text-center py-12">
-                    <p className="text-text-muted">Žádná videa se nenahrávají</p>
+                    <p className="text-text-muted">Prázdná fronta</p>
+                    <p className="text-xs text-text-muted mt-2">Přidejte videa z karty "Videa"</p>
                   </div>
                 )}
               </div>
@@ -1114,11 +1046,13 @@ function App() {
                 )}
               </div>
             )}
+            </div>
           </div>
+
+          {/* Footer - always visible */}
+          <Footer />
         </div>
       </main>
-
-      <Footer />
     </div>
   )
 }

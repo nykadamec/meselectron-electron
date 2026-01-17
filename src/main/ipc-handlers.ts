@@ -6,6 +6,9 @@ import axios from 'axios'
 import { Worker } from 'worker_threads'
 import os from 'os'
 
+// Global variable to track active download worker for cancellation
+let activeDownloadWorker: Worker | null = null
+
 // Types
 interface Account {
   id: string
@@ -30,6 +33,9 @@ interface Settings {
 
 // Get user data path for settings
 const getUserDataPath = () => process.env.APPDATA || path.join(process.env.HOME || '', 'Library/Application Support')
+
+// Get app-specific data path for persistence
+const getAppDataPath = () => path.join(getUserDataPath(), 'prehrajto-autopilot')
 
 // Get the path to the project root (where DATA folder is located)
 const getProjectRoot = () => {
@@ -70,6 +76,25 @@ ipcMain.handle('settings:write', async (_, settings: Settings) => {
   await fs.mkdir(appPath, { recursive: true })
   const settingsPath = path.join(appPath, 'settings.json')
   await fs.writeFile(settingsPath, JSON.stringify(settings, null, 2))
+  return true
+})
+
+// Processed videos persistence handlers
+ipcMain.handle('processed:read', async () => {
+  const dataPath = path.join(getAppDataPath(), 'processed.json')
+  try {
+    const data = await fs.readFile(dataPath, 'utf-8')
+    return JSON.parse(data) as { url: string; status: string; timestamp: string }[]
+  } catch {
+    return []
+  }
+})
+
+ipcMain.handle('processed:write', async (_, items: { url: string; status: string; timestamp: string }[]) => {
+  const appPath = getAppDataPath()
+  await fs.mkdir(appPath, { recursive: true })
+  const dataPath = path.join(appPath, 'processed.json')
+  await fs.writeFile(dataPath, JSON.stringify(items, null, 2))
   return true
 })
 
@@ -592,7 +617,7 @@ ipcMain.handle('platform:info', () => {
 })
 
 // Download handler using worker
-ipcMain.handle('download:start', async (_, options: { url: string; outputPath?: string; cookies?: string; videoId?: string; maxConcurrent?: number; addWatermark?: boolean; ffmpegPath?: string }) => {
+ipcMain.handle('download:start', async (_, options: { url: string; outputPath?: string; cookies?: string; videoId?: string; maxConcurrent?: number; addWatermark?: boolean; ffmpegPath?: string; hqProcessing?: boolean }) => {
   return new Promise((resolve, reject) => {
     const workerPath = path.join(__dirname, '../workers/download.worker.cjs')
 
@@ -610,28 +635,34 @@ ipcMain.handle('download:start', async (_, options: { url: string; outputPath?: 
       }
     })()
 
-    // Read current settings to get downloadMode
+    // Read current settings to get downloadMode and hqProcessing
     const settingsPath = path.join(getUserDataPath(), 'prehrajto-autopilot', 'settings.json')
     let downloadMode = 'ffmpeg-chunks'
+    let hqProcessing = true
     try {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const settingsData = require('fs').readFileSync(settingsPath, 'utf-8')
       const settings = JSON.parse(settingsData)
       downloadMode = settings.downloadMode || 'ffmpeg-chunks'
+      hqProcessing = settings.hqProcessing !== false
     } catch {
-      // Use default
+      // Use defaults
     }
 
     const workerPayload = {
       ...options,
       outputPath,
       ffmpegPath,
-      downloadMode
+      downloadMode,
+      hqProcessing
     }
 
     const worker = new Worker(workerPath, {
       workerData: { type: 'download', payload: workerPayload }
     })
+
+    // Store reference to active worker for cancellation
+    activeDownloadWorker = worker
 
     worker.on('message', (update) => {
       // Handle IPC calls from worker
@@ -781,6 +812,10 @@ ipcMain.handle('download:start', async (_, options: { url: string; outputPath?: 
 
     worker.on('error', reject)
     worker.on('exit', (code) => {
+      // Clear active worker reference if this was the active worker
+      if (activeDownloadWorker === worker) {
+        activeDownloadWorker = null
+      }
       if (code === 0) resolve({ success: true })
       else reject(new Error(`Worker exited with code ${code}`))
     })
@@ -788,13 +823,17 @@ ipcMain.handle('download:start', async (_, options: { url: string; outputPath?: 
 })
 
 // Extract video metadata (called from worker to avoid thread network issues)
-ipcMain.handle('download:extract-metadata', async (_, { url, cookies }) => {
-  console.log('[IPC] Extracting metadata from:', url.substring(0, 60))
+ipcMain.handle('download:extract-metadata', async (_, { url, cookies, hqProcessing }) => {
+  console.log('[IPC] Extracting metadata from:', url.substring(0, 60), '| HQ:', hqProcessing)
 
   try {
-    const downloadUrl = url.includes('?') ? `${url}&do=download` : `${url}?do=download`
+    // HQ Processing (default): use ?do=download URL
+    // LQ Processing: use original URL directly
+    const fetchUrl = hqProcessing !== false
+      ? (url.includes('?') ? `${url}&do=download` : `${url}?do=download`)
+      : url
 
-    const response = await axios.get(downloadUrl, {
+    const response = await axios.get(fetchUrl, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
         'Cookie': cookies || ''
@@ -1091,5 +1130,17 @@ ipcMain.handle('session:save-credentials', async (_, email: string, password: st
   } catch (error) {
     console.error('[IPC] session:save-credentials error:', error)
     return { success: false, error: String(error) }
+  }
+})
+
+// Download stop handler - terminates active download worker
+ipcMain.on('download:stop', () => {
+  if (activeDownloadWorker) {
+    console.log('[IPC] Terminating active download worker...')
+    activeDownloadWorker.terminate()
+    activeDownloadWorker = null
+    console.log('[IPC] Download worker terminated')
+  } else {
+    console.log('[IPC] No active download worker to terminate')
   }
 })

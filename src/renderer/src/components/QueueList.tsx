@@ -28,6 +28,7 @@ interface QueueListProps {
   onRetry?: () => void
   onRemove?: (itemId: string) => void
   onReorder?: (newQueue: QueueItem[]) => void
+  onKill?: (itemId: string) => void
 }
 
 // Helper functions for formatting
@@ -58,10 +59,12 @@ const formatETA = (seconds?: number) => {
 function SortableQueueItem({
   item,
   onRemove,
+  onKill,
   isActive
 }: {
   item: QueueItem
   onRemove?: (itemId: string) => void
+  onKill?: (itemId: string) => void
   isActive: boolean
 }) {
   const {
@@ -117,16 +120,28 @@ function SortableQueueItem({
       <div className="flex items-start justify-between gap-2">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">
-            {/* Drag handle */}
-            <button
-              className="cursor-grab active:cursor-grabbing p-1 text-text-muted hover:text-text-primary transition-colors"
-              {...attributes}
-              {...listeners}
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8h16M4 16h16" />
-              </svg>
-            </button>
+            {/* Drag handle or Kill button */}
+            {item.status === 'active' && onKill ? (
+              <button
+                onClick={() => onKill(item.id)}
+                className="cursor-grab active:cursor-grabbing p-1 text-error hover:text-error/80 transition-colors"
+                title="Zrušit stahování"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            ) : (
+              <button
+                className="cursor-grab active:cursor-grabbing p-1 text-text-muted hover:text-text-primary transition-colors"
+                {...attributes}
+                {...listeners}
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8h16M4 16h16" />
+                </svg>
+              </button>
+            )}
             <div className={`w-2 h-2 rounded-full ${getStatusColor(item.status)}`} />
             <p className="text-sm font-medium truncate">{item.video.title}</p>
           </div>
@@ -151,6 +166,13 @@ function SortableQueueItem({
                   style={{ width: `${item.phase === 'upload' ? (item.uploadProgress || 0) : (item.progress || 0)}%` }}
                 />
               </div>
+
+              {/* Status message */}
+              {item.statusMessage && (
+                <div className="text-xs text-accent font-mono mt-1">
+                  {item.statusMessage}
+                </div>
+              )}
 
               {/* Stats row */}
               <div className="flex flex-wrap gap-3 text-xs text-text-muted">
@@ -200,7 +222,8 @@ export function QueueList({
   onCancel,
   onRetry,
   onRemove,
-  onReorder
+  onReorder,
+  onKill
 }: QueueListProps) {
   const [items, setItems] = useState(queue)
   const [activeId, setActiveId] = useState<string | null>(null)
@@ -296,6 +319,7 @@ export function QueueList({
                 key={item.id}
                 item={item}
                 onRemove={onRemove}
+                onKill={onKill}
                 isActive={item.status === 'active'}
               />
             ))}

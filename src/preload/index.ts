@@ -41,6 +41,18 @@ contextBridge.exposeInMainWorld('electronAPI', {
   downloadStart: function(options) {
     return ipcRenderer.invoke('download:start', options)
   },
+  downloadStop: function() {
+    ipcRenderer.send('download:stop')
+  },
+
+  // Processed videos persistence
+  processedRead: function() {
+    return ipcRenderer.invoke('processed:read')
+  },
+  processedWrite: function(items) {
+    return ipcRenderer.invoke('processed:write', items)
+  },
+
   uploadStart: function(options) {
     return ipcRenderer.invoke('upload:start', options)
   },

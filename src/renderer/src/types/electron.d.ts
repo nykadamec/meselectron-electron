@@ -9,6 +9,8 @@ interface ElectronAPI {
     nospeed: boolean
     addWatermark: boolean
     outputDir: string
+    downloadMode: string
+    hqProcessing: boolean
   }>
   settingsWrite: (settings: Record<string, unknown>) => Promise<boolean>
 
@@ -58,13 +60,20 @@ interface ElectronAPI {
     maxConcurrent?: number
     addWatermark?: boolean
     ffmpegPath?: string
+    hqProcessing?: boolean
   }) => Promise<{ success: boolean }>
+  downloadStop: () => void
+
+  // Processed videos persistence
+  processedRead: () => Promise<Array<{ url: string; status: string; timestamp: string }>>
+  processedWrite: (items: Array<{ url: string; status: string; timestamp: string }>) => Promise<boolean>
 
   // Upload
   uploadStart: (options: {
     filePath: string
     cookies?: string
   }) => Promise<{ success: boolean }>
+  uploadStop: () => void
 
   // Video Discovery
   discoverStart: (options: {

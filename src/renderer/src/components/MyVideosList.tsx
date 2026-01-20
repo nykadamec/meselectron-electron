@@ -165,75 +165,81 @@ export function MyVideosList() {
       )}
 
       {filteredVideos.length > 0 ? (
-        <div className="card-base">
-          <div className="flex flex-col divide-y divide-border">
+        <div className="bg-surface/50 border border-slate-700/30 rounded-xl overflow-hidden">
+          <div className="flex flex-col divide-y divide-slate-700/50">
             {filteredVideos.map((video) => (
-              <VideoCard key={video.id} video={video} onDeleteClick={handleDeleteClick} />
+              <div key={video.id} className="p-1.5">
+                <VideoCard video={video} onDeleteClick={handleDeleteClick} />
+              </div>
             ))}
           </div>
         </div>
       ) : myVideos.length === 0 && !isLoadingMyVideos && process.env.NODE_ENV === 'development' ? (
         // Demo mode for testing new design
-        <div className="card-base">
-          <div className="flex flex-col divide-y divide-border">
-            <VideoCard
-              video={{
-                id: 'demo1',
-                title: 'Toto je ukázkové video s dlouhým názvem pro testování',
-                thumbnail: 'https://picsum.photos/seed/video1/320/180',
-                views: 12543,
-                addedAt: new Date().toISOString(),
-                url: 'https://example.com/video1',
-                size: '1.2 GB',
-                likes: 342,
-                dislikes: 12,
-              }}
-              onDeleteClick={() => {}}
-            />
-            <VideoCard
-              video={{
-                id: 'demo2',
-                title: 'Krátké video',
-                thumbnail: 'https://picsum.photos/seed/video2/320/180',
-                views: 890,
-                addedAt: new Date(Date.now() - 86400000).toISOString(),
-                url: 'https://example.com/video2',
-                size: '456 MB',
-                likes: 45,
-                dislikes: 3,
-              }}
-              onDeleteClick={() => {}}
-            />
-            <VideoCard
-              video={{
-                id: 'demo3',
-                title: 'Video bez thumbnailu',
-                thumbnail: undefined,
-                views: 1500000,
-                addedAt: new Date(Date.now() - 172800000).toISOString(),
-                url: 'https://example.com/video3',
-                size: '3.4 GB',
-                likes: 12543,
-                dislikes: 89,
-              }}
-              onDeleteClick={() => {}}
-            />
+        <div className="bg-surface/50 border border-slate-700/30 rounded-xl overflow-hidden">
+          <div className="flex flex-col  divide-slate-700/50">
+            <div className="p-1.5">
+              <VideoCard
+                video={{
+                  id: 'demo1',
+                  title: 'Toto je ukázkové video s dlouhým názvem pro testování ořezávání textu na dva řádky',
+                  thumbnail: 'https://picsum.photos/seed/video1/320/180',
+                  views: 12543,
+                  addedAt: new Date().toISOString(),
+                  url: 'https://example.com/video1',
+                  size: '1.2 GB',
+                  likes: 342,
+                  dislikes: 12,
+                }}
+                onDeleteClick={() => {}}
+              />
+            </div>
+            <div className="p-1.5">
+              <VideoCard
+                video={{
+                  id: 'demo2',
+                  title: 'Krátké video',
+                  thumbnail: 'https://picsum.photos/seed/video2/320/180',
+                  views: 890,
+                  addedAt: new Date(Date.now() - 86400000).toISOString(),
+                  url: 'https://example.com/video2',
+                  size: '456 MB',
+                  likes: 45,
+                  dislikes: 3,
+                }}
+                onDeleteClick={() => {}}
+              />
+            </div>
+            <div className="p-1.5">
+              <VideoCard
+                video={{
+                  id: 'demo3',
+                  title: 'Video bez thumbnailu s dlouhým názvem pro testování',
+                  thumbnail: undefined,
+                  views: 1500000,
+                  addedAt: new Date(Date.now() - 172800000).toISOString(),
+                  url: 'https://example.com/video3',
+                  size: '3.4 GB',
+                  likes: 12543,
+                  dislikes: 89,
+                }}
+                onDeleteClick={() => {}}
+              />
+            </div>
           </div>
         </div>
-      ) : (
-        !isLoadingMyVideos && (
-          <div className="text-center py-12 bg-surface border border-dashed border-border rounded-xl">
-            <PlayCircle className="w-12 h-12 text-text-muted mx-auto mb-4" />
-            <p className="text-text-secondary">
-              {myVideosSearchQuery ? t('search.noResults') : t('empty.myVideos')}
-            </p>
-            <p className="text-xs text-text-muted mt-2">
-              {myVideosSearchQuery
-                ? t('empty.myVideosHelp')
-                : t('empty.myVideosHelp')}
-            </p>
-          </div>
-        )
+      ) : !isLoadingMyVideos && (
+        <div className="text-center py-12 bg-surface border border-dashed border-border rounded-xl">
+          <PlayCircle className="w-12 h-12 text-text-muted mx-auto mb-4" />
+          <p className="text-text-secondary">
+            {myVideosSearchQuery ? t('search.noResults') : t('empty.myVideos')}
+          </p>
+          <p className="text-xs text-text-muted mt-2">
+            {myVideosSearchQuery
+              ? t('empty.myVideosHelp')
+              : t('empty.myVideosHelp')}
+          </p>
+        </div>
       )}
 
       {isLoadingMyVideos && (

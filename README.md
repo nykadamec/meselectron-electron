@@ -40,6 +40,32 @@
 
 ---
 
+## 📸 Screenshots
+
+<div align="center">
+
+![Video Discovery](./.images/prehrajto001.png)
+*Video Discovery - Browse and select videos to download*
+
+---
+
+![Queue Management](./.images/prehrajto002.png)
+*Queue Management - Drag & drop reordering with real-time progress*
+
+---
+
+![Download Progress](./.images/prehrajto003.png)
+*Download Progress - Live speed, ETA, and phase tracking*
+
+---
+
+![My Videos Dashboard](./.images/prehrajto004.png)
+*My Videos - Manage your uploaded videos*
+
+</div>
+
+---
+
 ## 📖 Overview
 
 Prehraj.to AutoPilot is a powerful desktop application designed to automate video management workflows for the Czech video platform prehraj.to. Built with Electron and React, it provides a modern, cross-platform interface for handling video discovery, downloading, watermarking, and uploading.

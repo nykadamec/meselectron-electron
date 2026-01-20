@@ -1,10 +1,10 @@
 {
   "name": "prehrajto-autopilot",
   "version": "0.1.3",
-  "description": "Prehraj.to AutoPilot - Desktop application for video management",
+  "description": "Prehrajto.cz AutoPilot - Desktop application for video management",
   "main": "dist/main/index.js",
-  "appName": "Prehraj.to AutoPilot",
-  "buildNumber": "2620_1716",
+  "appName": "Prehrajto.cz AutoPilot",
+  "buildNumber": "2620_2310",
   "scripts": {
     "sync": "node scripts/sync-config.js",
     "sync:watch": "node --watch scripts/sync-config.js",

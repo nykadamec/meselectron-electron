@@ -1,9 +1,9 @@
 app:
   name: "prehrajto-autopilot"
-  app_name: "Prehraj.to AutoPilot"
+  app_name: "Prehrajto.cz AutoPilot"
   version: "0.1.3"
-  buildNumber: "2620_1716"
-  description: "Prehraj.to AutoPilot - Desktop application for video management"
+  buildNumber: "2620_2310"
+  description: "Prehrajto.cz AutoPilot - Desktop application for video management"
   environment: "development"
 config:
   MAX_UPLOAD_SIZE: 2147483648  # 2 GB

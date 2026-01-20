@@ -8,6 +8,8 @@
 [![React](https://img.shields.io/badge/React-19.2.3-61DAFB?style=for-the-badge&logo=react)](https://reactjs.org)
 [![License](https://img.shields.io/badge/License-ISC-FDAD00?style=for-the-badge)](LICENSE)
 
+[**English**](../README.md) • [**Česky**](../README.cs.md)
+
 <br>
 
 ```text

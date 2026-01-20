@@ -1,0 +1,6 @@
+onlyBuiltDependencies:
+  - '@ffmpeg-installer/darwin-arm64'
+  - electron
+  - electron-winstaller
+  - esbuild
+  - puppeteer

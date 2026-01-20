@@ -16212,3 +16212,4 @@ node_modules/zustand/react/shallow.d.ts
 node_modules/zustand/react/shallow.js
 node_modules/zustand/vanilla/shallow.d.ts
 node_modules/zustand/vanilla/shallow.js
+.env

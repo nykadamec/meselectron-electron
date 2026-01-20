@@ -20,8 +20,7 @@ import {
   Download,
   Settings,
   PlayCircle,
-  FileText,
-  Folder
+  FileText
 } from 'lucide-react'
 
 function App() {
@@ -262,17 +261,6 @@ function App() {
     }
   }, [updateVideo, addLog, setVideoCandidates, setDiscovering, processQueue])
 
-  const handleOpenFolder = useCallback(async () => {
-    if (!window.electronAPI) return
-    const platformInfo = await window.electronAPI.platformInfo()
-    const videosPath = `${platformInfo.appPath}/VIDEOS`
-    try {
-      await window.electronAPI.filesOpenFolder(videosPath)
-    } catch {
-      addLog({ id: crypto.randomUUID(), timestamp: new Date(), level: 'error', message: 'Nelze otevřít složku', source: 'app' })
-    }
-  }, [addLog])
-
   const navItems = [
     { id: 'videos', label: localeStore.t('nav.videos'), icon: Search },
     { id: 'downloads', label: localeStore.t('nav.process'), icon: Download },
@@ -352,12 +340,6 @@ function App() {
               <ScrollArea.Thumb style={{ flex: 1, backgroundColor: 'var(--color-border-base)', borderRadius: 3 }} />
             </ScrollArea.Scrollbar>
           </ScrollArea.Root>
-          <div style={{ padding: 16, borderTop: '1px solid var(--color-border-base)', backgroundColor: 'var(--color-surface-base)' }}>
-            <button onClick={handleOpenFolder} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, width: '100%', padding: '10px 16px', backgroundColor: 'var(--color-surface-elevated)', border: '1px solid var(--color-border-base)', borderRadius: 8, color: 'var(--color-text-primary)', fontSize: 13, fontWeight: 500, cursor: 'pointer', transition: 'all 0.15s ease' }}>
-              <Folder style={{ width: 16, height: 16 }} />
-              {localeStore.t('actions.openFolder')}
-            </button>
-          </div>
         </aside>
 
         {/* Main Content */}

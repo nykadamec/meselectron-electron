@@ -6,6 +6,9 @@ import axios from 'axios'
 import { Worker } from 'worker_threads'
 import os from 'os'
 
+// Declare __nonWebpack_require__ for asar module loading (used in production only)
+declare const __nonWebpack_require__: (modulePath: string) => unknown
+
 // Global variable to track active download worker for cancellation
 let activeDownloadWorker: Worker | null = null
 
@@ -577,52 +580,41 @@ ipcMain.handle('version:check', async () => {
 // Get local version from package.json (use app directory, not data directory)
 ipcMain.handle('version:get', async () => {
   try {
-    // Use process.cwd() for development, or __dirname for production
-    const appPath = process.env.NODE_ENV === 'production'
-      ? path.dirname(process.execPath)
-      : process.cwd()
-    const packageJsonPath = path.join(appPath, 'package.json')
-    console.log('[Version] Looking for package.json at:', packageJsonPath)
-    const data = await fs.readFile(packageJsonPath, 'utf-8')
-    const packageJson = JSON.parse(data)
-    console.log('[Version] Found version:', packageJson.version)
-    return packageJson.version || '0.0.0'
-  } catch (error) {
-    // Fallback to bundled package.json in resources
-    console.log('[Version] Primary path failed, trying resources path')
-    try {
-      const bundledPath = path.join(process.resourcesPath, 'app', 'package.json')
-      console.log('[Version] Looking for package.json at:', bundledPath)
-      const data = await fs.readFile(bundledPath, 'utf-8')
+    const isDev = process.env.NODE_ENV === 'development' || !process.env.NODE_ENV
+
+    if (isDev) {
+      const packageJsonPath = path.join(process.cwd(), 'package.json')
+      const data = await fs.readFile(packageJsonPath, 'utf-8')
       const packageJson = JSON.parse(data)
-      console.log('[Version] Found version in resources:', packageJson.version)
       return packageJson.version || '0.0.0'
-    } catch (error2) {
-      console.log('[Version] All paths failed, returning 0.0.0')
-      return '0.0.0'
+    } else {
+      // In production, package.json is inside app.asar at root level
+      const packageJson = __nonWebpack_require__(path.join(process.resourcesPath, 'app.asar/package.json')) as { version?: string }
+      return packageJson.version || '0.0.0'
     }
+  } catch (error) {
+    console.error('[Version] Failed to read version:', error)
+    return '0.0.0'
   }
 })
 
 // Get app name from package.json
 ipcMain.handle('name:get', async () => {
   try {
-    const appPath = process.env.NODE_ENV === 'production'
-      ? path.dirname(process.execPath)
-      : process.cwd()
-    const packageJsonPath = path.join(appPath, 'package.json')
-    const data = await fs.readFile(packageJsonPath, 'utf-8')
-    const packageJson = JSON.parse(data)
-    return packageJson.appName || 'Prehrajto AutoPilot'
-  } catch {
-    try {
-      const bundledPath = path.join(process.resourcesPath, 'app', 'package.json')
-      const data = await fs.readFile(bundledPath, 'utf-8')
+    const isDev = process.env.NODE_ENV === 'development' || !process.env.NODE_ENV
+
+    if (isDev) {
+      const packageJsonPath = path.join(process.cwd(), 'package.json')
+      const data = await fs.readFile(packageJsonPath, 'utf-8')
       const packageJson = JSON.parse(data)
-      return packageJson.appName || 'Prehrajto AutoPilot'
-    } catch {
-      return 'Prehrajto AutoPilot'
+      return packageJson.productName || packageJson.name || 'Prehrajto AutoPilot'
+    } else {
+      // In production, package.json is inside app.asar at root level
+      const packageJson = __nonWebpack_require__(path.join(process.resourcesPath, 'app.asar/package.json')) as { productName?: string; name?: string }
+      return packageJson.productName || packageJson.name || 'Prehrajto AutoPilot'
     }
+  } catch {
+    return 'Prehrajto AutoPilot'
   }
 })
 
@@ -1217,14 +1209,26 @@ let updaterState: UpdaterState = {
 
 let downloadCancellation: (() => void) | null = null
 
-// Get app version from package.json
+// Get app version from package.json (from app resources, not user data)
 async function getAppVersion(): Promise<string> {
   try {
-    const packageJsonPath = path.join(getProjectRoot(), 'package.json')
-    const data = await fs.readFile(packageJsonPath, 'utf-8')
-    const packageJson = JSON.parse(data)
-    return packageJson.version || '0.0.0'
-  } catch {
+    // Production: package.json is inside app.asar, use __nonWebpack_require__ to read it
+    // Development: package.json is in cwd
+    const isDev = process.env.NODE_ENV === 'development' || !process.env.NODE_ENV
+
+    if (isDev) {
+      const packageJsonPath = path.join(process.cwd(), 'package.json')
+      const data = await fs.readFile(packageJsonPath, 'utf-8')
+      const packageJson = JSON.parse(data)
+      return packageJson.version || '0.0.0'
+    } else {
+      // In production, package.json is inside app.asar at root level
+      // Use __nonWebpack_require__ which can read from asar archives
+      const packageJson = __nonWebpack_require__(path.join(process.resourcesPath, 'app.asar/package.json')) as { version?: string }
+      return packageJson.version || '0.0.0'
+    }
+  } catch (error) {
+    console.error('[Version] Failed to read version:', error)
     return '0.0.0'
   }
 }

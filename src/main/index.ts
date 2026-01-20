@@ -1,5 +1,6 @@
 import { app, BrowserWindow, nativeTheme, ipcMain } from 'electron'
 import path from 'path'
+import { initAnalytics, trackAppLaunch, trackAppClose, flushAnalytics } from './analytics.js'
 
 let mainWindow: BrowserWindow | null = null
 
@@ -58,8 +59,13 @@ function createWindow() {
   })
 }
 
+// Initialize analytics
+initAnalytics()
+
+// Track app launch when ready
 app.whenReady().then(() => {
   createWindow()
+  trackAppLaunch()
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -72,6 +78,12 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit()
   }
+})
+
+// Track app close
+app.on('before-quit', () => {
+  trackAppClose()
+  flushAnalytics()
 })
 
 // IPC Handlers

@@ -1,11 +1,14 @@
 import type { MyVideo } from '../types'
-import { ThumbsUp, ThumbsDown, Download, ExternalLink } from 'lucide-react'
+import { ThumbsUp, ThumbsDown, Download, ExternalLink, Trash2 } from 'lucide-react'
+import { useAppStore } from '../store'
 
 interface MyVideosCardProps {
   video: MyVideo
 }
 
 export function MyVideosCard({ video }: MyVideosCardProps) {
+  const { deleteMyVideo, accounts } = useAppStore()
+  
   const formatViews = (views: number): string => {
     if (views >= 1000000) {
       return `${(views / 1000000).toFixed(1)}M`
@@ -16,10 +19,27 @@ export function MyVideosCard({ video }: MyVideosCardProps) {
     return views.toString()
   }
 
+  const handleDelete = async () => {
+    const confirmed = confirm(`Opravdu chcete smazat video: ${video.title}?`)
+    if (!confirmed) return
+
+    const activeAccount = accounts.find(acc => acc.isActive)
+    if (!activeAccount) return
+
+    try {
+      const cookies = await window.electronAPI.accountsReadCookies(activeAccount.id)
+      if (cookies) {
+        await deleteMyVideo(video.id, cookies)
+      }
+    } catch (err) {
+      console.error('Failed to delete video:', err)
+    }
+  }
+
   const isProcessing = video.title.includes('Zpracovává se')
 
   return (
-    <div className="flex items-center gap-3 py-2 px-3 rounded-lg hover:bg-bg-hover transition-colors">
+    <div className="flex items-center gap-3 py-2 px-3 rounded-lg hover:bg-bg-hover transition-colors group">
       {/* Thumbnail */}
       <div className="w-32 h-18 bg-bg-hover rounded overflow-hidden flex-shrink-0">
         {video.thumbnail ? (
@@ -90,17 +110,29 @@ export function MyVideosCard({ video }: MyVideosCardProps) {
         </div>
       </div>
 
-      {/* Open Link */}
-      <a
-        href={video.url}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="flex-shrink-0 p-2 rounded-lg hover:bg-bg-hover transition-colors"
-        title="Otevřít na prehrajto.cz"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <ExternalLink className="w-5 h-5 text-text-muted hover:text-accent" />
-      </a>
+      {/* Actions */}
+      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+        {/* Open Link */}
+        <a
+          href={video.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="p-2 rounded-lg hover:bg-bg-hover transition-colors text-text-muted hover:text-accent"
+          title="Otevřít na prehrajto.cz"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <ExternalLink className="w-4.5 h-4.5" />
+        </a>
+
+        {/* Delete */}
+        <button
+          onClick={handleDelete}
+          className="p-2 rounded-lg hover:bg-red-500/10 transition-colors text-text-muted hover:text-red-500"
+          title="Smazat video"
+        >
+          <Trash2 className="w-4.5 h-4.5" />
+        </button>
+      </div>
     </div>
   )
 }

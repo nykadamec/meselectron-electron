@@ -41,6 +41,7 @@ interface ElectronAPI {
     error?: string
   }>
   versionGet: () => Promise<string | null>
+  buildGet: () => Promise<string>
   nameGet: () => Promise<string>
 
   // Platform

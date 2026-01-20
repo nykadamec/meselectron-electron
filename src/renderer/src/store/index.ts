@@ -311,7 +311,7 @@ export const useAppStore = create<AppState>((set) => ({
           useAppStore.getState().setMyVideos(progressData.videos || [], progressData.hasMore || false)
           useAppStore.setState({ myVideosPage: 1 })
         } else {
-          useAppStore.getState().addMyVideos(progressData.videos || [], progressData.hasMore || false)
+          useAppStore.getState().setMyVideos(progressData.videos || [], progressData.hasMore || false)
           useAppStore.setState({ myVideosPage: page })
         }
       } else if (progressData.type === 'error') {
@@ -330,6 +330,20 @@ export const useAppStore = create<AppState>((set) => ({
       })
     } finally {
       window.electronAPI.removeListener('myvideos:progress', progressHandler)
+    }
+  },
+  deleteMyVideo: async (videoId, cookies) => {
+    set({ isLoadingMyVideos: true })
+    try {
+      await window.electronAPI.myVideosDelete({ cookies, videoId })
+      // After deletion, refresh the current page
+      const currentPage = useAppStore.getState().myVideosPage
+      await useAppStore.getState().loadMyVideos(currentPage, cookies)
+    } catch (error) {
+      set({
+        isLoadingMyVideos: false,
+        myVideosError: error instanceof Error ? error.message : 'Chyba při mazání videa'
+      })
     }
   },
 

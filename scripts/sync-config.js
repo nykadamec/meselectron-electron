@@ -6,6 +6,7 @@
  * - version → version
  * - description → description
  * - app_name → appName
+ * - buildNumber → buildNumber
  */
 
 import fs from 'node:fs';
@@ -35,6 +36,7 @@ function syncConfig() {
   if (appData.version) packageJson.version = appData.version;
   if (appData.description) packageJson.description = appData.description;
   if (appData.app_name) packageJson.appName = appData.app_name;
+  if (appData.buildNumber) packageJson.buildNumber = appData.buildNumber;
 
   // Write package.json with proper formatting
   fs.writeFileSync(
@@ -47,6 +49,7 @@ function syncConfig() {
   console.log(`   name: ${packageJson.name}`);
   console.log(`   version: ${packageJson.version}`);
   console.log(`   appName: ${packageJson.appName}`);
+  console.log(`   buildNumber: ${packageJson.buildNumber}`);
 }
 
 // Run if executed directly

@@ -31,10 +31,16 @@ interface MyVideosResponse {
 }
 
 /**
- * Parse Set-Cookie format to cookie header string
- * Format: name=value; Domain=...; Path=...; Secure; HttpOnly
+ * Parse Set-Cookie format to cookie header string or return as-is if already a header
  */
 function parseCookieFile(content: string): string {
+  if (!content) return ''
+  
+  // If it already looks like a cookie header (multiple semicolons, no newlines), return as is
+  if (content.includes(';') && !content.includes('\n') && content.includes('=')) {
+    return content
+  }
+
   const cookies: string[] = []
   const lines = content.trim().split('\n')
 
@@ -42,7 +48,7 @@ function parseCookieFile(content: string): string {
     const trimmed = line.trim()
     if (!trimmed || trimmed.startsWith('#')) continue
 
-    const cookiePart = trimmed.split(';')[0]
+    const cookiePart = trimmed.split('\t').pop()?.split(';')[0] || trimmed.split(';')[0]
     if (cookiePart && cookiePart.includes('=')) {
       cookies.push(cookiePart)
     }
@@ -59,53 +65,56 @@ async function extractVideosFromProfilePage(url: string, cookies: string): Promi
   try {
     const response = await axios.get(url, {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
-        'Cookie': cookies || ''
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Cookie': cookies || '',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+        'Referer': 'https://prehrajto.cz/'
       },
       timeout: 15000
     })
 
     const html = response.data
     const videos: MyVideo[] = []
+    
+    // Check if we are actually logged in
+    const isLoggedIn = html.includes('Odhlásit se') || html.includes('Přihlášený uživatel')
+    console.log(`[MyVideos] Fetched HTML length: ${html.length} bytes | Logged in: ${isLoggedIn}`)
 
-    // Parse video items using index-based approach (more reliable than regex for nested HTML)
-    const videoItemStart = 'class="margin-bottom-1" id="snippet-uploadedVideoListing-video-'
+    if (!isLoggedIn) {
+      console.warn('[MyVideos] Warning: Not logged in. Cookies might be invalid.')
+    }
 
-    let searchIndex = 0
+    // Robust regex to find video item containers
+    const itemRegex = /id="snippet-uploadedVideoListing-video-(\d+)"/gi
+    let match: RegExpExecArray | null
     const seenIds = new Set<string>()
 
-    while (true) {
-      const startPos = html.indexOf(videoItemStart, searchIndex)
-      if (startPos === -1) break
+    while ((match = itemRegex.exec(html)) !== null) {
+      const id = match[1]
+      const idPos = match.index
+      
+      if (seenIds.has(id)) continue
+      seenIds.add(id)
 
-      // Extract ID
-      const idStart = startPos + videoItemStart.length
-      const idEnd = html.indexOf('"', idStart)
-      if (idEnd === -1) break
-      const id = html.substring(idStart, idEnd)
+      // Find the start of the div container
+      const startPos = html.lastIndexOf('<div', idPos)
+      if (startPos === -1) continue
 
-      // Find the end of this video item - look for the closing div
-      // We need to find where this specific margin-bottom-1 div ends
-      // Strategy: find the position after the opening tag, then count nested divs
-      const contentStart = html.indexOf('>', startPos) + 1
-      if (contentStart === 0) break
+      // Find the end of this video item container using depth counting
+      let depth = 0
+      let pos = startPos
+      let contentEnd = -1
 
-      let depth = 1
-      let contentEnd = contentStart
-      let pos = contentStart
-
-      while (depth > 0 && pos < html.length) {
+      while (pos < html.length) {
         const nextOpen = html.indexOf('<div', pos)
         const nextClose = html.indexOf('</div', pos)
 
         if (nextClose === -1) break
 
         if (nextOpen !== -1 && nextOpen < nextClose) {
-          // Opening div found first
           depth++
           pos = nextOpen + 4
         } else {
-          // Closing div found first
           depth--
           if (depth === 0) {
             contentEnd = nextClose
@@ -115,61 +124,43 @@ async function extractVideosFromProfilePage(url: string, cookies: string): Promi
         }
       }
 
-      searchIndex = contentEnd + 6 // move past </div>
+      if (contentEnd === -1) continue
 
-      if (seenIds.has(id)) continue
-      seenIds.add(id)
+      const itemHtml = html.substring(startPos, contentEnd + 6)
 
-      const itemHtml = html.substring(contentStart, contentEnd)
-
-      // Extract title: <h3 class="title margin-bottom-1 margin-right-1 word-break" id="snippet-uploadedVideoListing-videoName-{ID}">TITLE</h3>
-      const titleMatch = itemHtml.match(/<h3[^>]*id="snippet-uploadedVideoListing-videoName-\d+"[^>]*>([^<]+)<\/h3>/i)
+      // 1. Extract Title from snippet-uploadedVideoListing-videoName-{ID}
+      const titleMatch = itemHtml.match(/id="snippet-uploadedVideoListing-videoName-\d+"[^>]*>\s*([\s\S]*?)\s*<\/h3>/i)
       const title = titleMatch ? titleMatch[1].trim() : 'Unknown'
 
-      // Debug: show all img src found in itemHtml
-      const allImgMatches: string[] = (itemHtml.match(/<img[^>]+src="([^"]*)"[^>]*>/gi) || [])
-      console.log(`[MyVideos] Debug for ${id}: found ${allImgMatches.length} img tags`)
-      allImgMatches.forEach((img, i) => {
-        console.log(`[MyVideos]   img[${i}]: ${img}`)
-      })
+      // 2. Extract Thumbnail
+      const thumbMatch = itemHtml.match(/src="(https:\/\/thumb\.prehrajto\.cz\/[^"]+)"/i)
+      const thumbnail = thumbMatch ? thumbMatch[1] : undefined
 
-      // Extract thumbnail directly from img src with thumb.prehrajto.cz
-      const thumbnailMatch = itemHtml.match(/<img[^>]+src="(https:\/\/thumb\.prehrajto\.cz\/[^"]+)"[^>]*>/i)
-      console.log(`[MyVideos] Thumbnail match for ${id}:`, thumbnailMatch ? `FOUND: ${thumbnailMatch[1]}` : 'NOT FOUND')
-      const thumbnail = thumbnailMatch ? thumbnailMatch[1] : undefined
-
-      // Extract size: <strong style="font-size:13px">699.71 MB</strong>
-      const sizeMatch = itemHtml.match(/<strong[^>]*>\s*(\d+\.?\d*)\s*(MB|GB|KB|B)\s*<\/strong>/i)
+      // 3. Extract Size: "2.96 GB"
+      const sizeMatch = itemHtml.match(/(\d+(?:\.\d+)?)\s*(GB|MB|KB|B)/i)
       const size = sizeMatch ? `${sizeMatch[1]} ${sizeMatch[2]}` : undefined
 
-      // Extract video URL for linking: href="/parchanti-2010-cz-dabing/ef0c1d91e9497fbb"
-      const urlMatch = itemHtml.match(/href="(\/[^"]+\/[\da-f]+)"/i)
+      // 4. Extract Video URL: href="/slunce-seno-a-par-facek-cz-dabing/3b52b269c5155d68"
+      const urlMatch = itemHtml.match(/href="(\/[^"]+\/[\da-f]{16})"/i)
       const videoUrl = urlMatch ? `https://prehrajto.cz${urlMatch[1]}` : `https://prehrajto.cz/video/${id}`
 
-      // Extract download stats: Počet stažení (PREMIUM / CELKEM) followed by <div class="rating rating--text">0 / 0</div>
-      // First find the stats section
-      const statsSectionMatch = itemHtml.match(/Počet stažení[^<]*<[^>]*>(\d+)\s*\/s*(\d+)<\/div>/i)
-      const downloadsPremium = statsSectionMatch ? parseInt(statsSectionMatch[1], 10) : 0
-      const downloadsTotal = statsSectionMatch ? parseInt(statsSectionMatch[2], 10) : 0
+      // 5. Stats (Downloads) - rating rating--text">0 / 0</div>
+      const statsMatch = itemHtml.match(/rating--text">\s*(\d+)\s*\/\s*(\d+)\s*<\/div>/i)
+      const downloadsPremium = statsMatch ? parseInt(statsMatch[1], 10) : 0
+      const downloadsTotal = statsMatch ? parseInt(statsMatch[2], 10) : 0
 
-      // Extract rating: Look for the rate section
-      // Pattern: <div class="rate rate--stats">...<span class="text-medium color-green"><strong>0</strong>...<span class="text-medium color-primary"><strong>0</strong>
+      // 6. Rating (Likes/Dislikes)
       const likesMatch = itemHtml.match(/color-green[^>]*>\s*<strong>\s*(\d+)/i)
       const dislikesMatch = itemHtml.match(/color-primary[^>]*>\s*<strong>\s*(\d+)/i)
       const likes = likesMatch ? parseInt(likesMatch[1], 10) : 0
       const dislikes = dislikesMatch ? parseInt(dislikesMatch[1], 10) : 0
 
-      // Count total views as premium + total downloads
-      const views = downloadsPremium + downloadsTotal
-
-      console.log(`[MyVideos] Parsed video ${id}: "${title}" - ${size || 'N/A'}`)
-
       videos.push({
         id,
         title,
-        thumbnail: thumbnail?.startsWith('//') ? `https:${thumbnail}` : thumbnail,
-        views,
-        addedAt: new Date().toISOString(), // Would need to extract from another field if available
+        thumbnail,
+        views: downloadsPremium + downloadsTotal,
+        addedAt: new Date().toISOString(),
         url: videoUrl,
         size,
         downloadsPremium,
@@ -178,11 +169,13 @@ async function extractVideosFromProfilePage(url: string, cookies: string): Promi
         dislikes
       })
 
-      // Limit results per page
-      if (videos.length >= 20) break
+      if (videos.length >= 50) break
     }
 
-    console.log(`[MyVideos] Total videos parsed: ${videos.length}`)
+    if (videos.length === 0 && isLoggedIn) {
+      console.log('[MyVideos] No videos found even though logged in. HTML sample:', html.substring(0, 1000).replace(/\s+/g, ' '))
+    }
+    
     return videos
 
   } catch (error) {
@@ -273,6 +266,49 @@ async function loadMyVideos(options: { cookies: string; page: number; accountId?
   return response
 }
 
+/**
+ * Delete a video using the Nette snippet URL
+ */
+async function deleteVideo(options: { cookies: string; videoId: string }) {
+  const parsedCookies = parseCookieFile(options.cookies || '')
+  
+  // The delete URL pattern from the user's example
+  const deleteUrl = `https://prehrajto.cz/profil/nahrana-videa?uploadedVideoListing-videoId=${options.videoId}&do=uploadedVideoListing-deleteVideo`
+  
+  console.log(`[MyVideos] Deleting video ${options.videoId} using URL: ${deleteUrl}`)
+
+  sendProgress({
+    type: 'status',
+    status: 'deleting',
+    message: `Mažu video ${options.videoId}...`
+  })
+
+  try {
+    const response = await axios.get(deleteUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
+        'Cookie': parsedCookies,
+        'Referer': 'https://prehrajto.cz/profil/nahrana-videa'
+      }
+    })
+
+    // If request was successful, send complete
+    sendProgress({
+      type: 'complete',
+      success: true,
+      action: 'delete'
+    })
+  } catch (error) {
+    console.error(`[MyVideos] Error deleting video:`, error instanceof Error ? error.message : error)
+    sendProgress({
+      type: 'complete',
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      action: 'delete'
+    })
+  }
+}
+
 // Handle request
 if (workerData.type === 'myvideos') {
   loadMyVideos(workerData.payload)
@@ -287,4 +323,6 @@ if (workerData.type === 'myvideos') {
         error: error instanceof Error ? error.message : String(error)
       })
     })
+} else if (workerData.type === 'myvideos-delete') {
+  deleteVideo(workerData.payload)
 }

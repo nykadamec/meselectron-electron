@@ -7,7 +7,7 @@ import { initUpdaterStore } from './store/updater'
 import { initI18n, useLocaleStore } from './i18n'
 import { Header } from './components/Header'
 import { StatsPanel } from './components/StatsPanel'
-import { MyVideosCard } from './components/MyVideosCard'
+import { MyVideosList } from './components/MyVideosList'
 import { QueueList } from './components/QueueList'
 import { LogViewer } from './components/LogViewer'
 import { SettingsPanel } from './components/SettingsPanel'
@@ -46,12 +46,7 @@ function App() {
     stats,
     updateStats,
     setVideoCandidates,
-    setDiscovering,
-    myVideos,
-    myVideosPage,
-    isLoadingMyVideos,
-    myVideosHasMore,
-    myVideosError
+    setDiscovering
   } = useAppStore()
 
   const [isLoading, setIsLoading] = useState(true)
@@ -376,35 +371,7 @@ function App() {
                 )}
                 {activeTab === 'logs' && <LogViewer logs={logs} />}
                 {activeTab === 'settings' && <SettingsPanel />}
-                {activeTab === 'myvideos' && (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <h2 style={{ fontSize: 18, fontWeight: 600 }}>{localeStore.t('nav.myVideos')}</h2>
-                      <button onClick={() => { const activeAccount = accounts.find(acc => acc.isActive); if (activeAccount) { accountsReadCookies(activeAccount.id).then(cookies => { if (cookies) { useAppStore.getState().clearMyVideos(); useAppStore.getState().loadMyVideos(1, cookies) } }) } }} disabled={isLoadingMyVideos || accounts.length === 0} className="btn-primary" style={{ opacity: (isLoadingMyVideos || accounts.length === 0) ? 0.5 : 1 }}>
-                        {isLoadingMyVideos ? localeStore.t('progress.loading') : localeStore.t('actions.loadVideos')}
-                      </button>
-                    </div>
-                    {myVideosError && <div style={{ padding: 16, backgroundColor: 'rgb(239 68 68 / 0.1)', border: '1px solid var(--color-error)', borderRadius: 8 }}><p style={{ color: 'var(--color-error)', fontSize: 14 }}>{myVideosError}</p></div>}
-                    {myVideos.length > 0 && (
-                      <div className="card-base">
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>{myVideos.map((video) => <MyVideosCard key={video.id} video={video} />)}</div>
-                      </div>
-                    )}
-                    {myVideos.length === 0 && !isLoadingMyVideos && (
-                      <div style={{ textAlign: 'center', padding: '48px 24px', backgroundColor: 'var(--color-surface-base)', borderRadius: 12, border: '1px dashed var(--color-border-base)' }}>
-                        <p style={{ color: 'var(--color-text-secondary)' }}>{localeStore.t('empty.myVideos')}</p>
-                        <p style={{ fontSize: 13, color: 'var(--color-text-muted)', marginTop: 8 }}>{localeStore.t('empty.myVideosHelp')}</p>
-                      </div>
-                    )}
-                    {isLoadingMyVideos && <div style={{ display: 'flex', justifyContent: 'center', padding: 24 }}><div className="spinner" /></div>}
-                    {myVideos.length > 0 && myVideosHasMore && !isLoadingMyVideos && (
-                      <div style={{ display: 'flex', justifyContent: 'center', gap: 16 }}>
-                        {myVideosPage > 1 && <button onClick={() => { const activeAccount = accounts.find(acc => acc.isActive); if (activeAccount) { accountsReadCookies(activeAccount.id).then(cookies => { if (cookies) { const prevPage = myVideosPage - 1; useAppStore.getState().loadMyVideos(prevPage, cookies) } }) } }} className="btn-secondary">Zpět (stránka {myVideosPage - 1})</button>}
-                        <button onClick={() => { const activeAccount = accounts.find(acc => acc.isActive); if (activeAccount) { accountsReadCookies(activeAccount.id).then(cookies => { if (cookies) { const nextPage = myVideosPage + 1; useAppStore.getState().loadMyVideos(nextPage, cookies) } }) } }} className="btn-secondary">Další (stránka {myVideosPage + 1})</button>
-                      </div>
-                    )}
-                  </div>
-                )}
+                {activeTab === 'myvideos' && <MyVideosList />}
               </div>
             </ScrollArea.Viewport>
             <ScrollArea.Scrollbar orientation="vertical" style={{ display: 'flex', width: 6, padding: 2, backgroundColor: 'transparent' }}>

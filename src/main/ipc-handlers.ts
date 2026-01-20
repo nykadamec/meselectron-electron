@@ -598,6 +598,27 @@ ipcMain.handle('version:get', async () => {
   }
 })
 
+// Get build number from package.json (use app directory, not data directory)
+ipcMain.handle('build:get', async () => {
+  try {
+    const isDev = process.env.NODE_ENV === 'development' || !process.env.NODE_ENV
+    
+    if (isDev) {
+      const packageJsonPath = path.join(process.cwd(), 'package.json')
+      const data = await fs.readFile(packageJsonPath, 'utf-8')
+      const packageJson = JSON.parse(data)
+      return packageJson.buildNumber || '0'
+    } else {
+      // In production, package.json is inside app.asar at root level
+      const packageJson = __nonWebpack_require__(path.join(process.resourcesPath, 'app.asar/package.json')) as { buildNumber?: string }
+      return packageJson.buildNumber || '0'
+    }
+  } catch (error) {
+    console.error('[Build] Failed to read build number:', error)
+    return '0'
+  }
+})
+
 // Get app name from package.json
 ipcMain.handle('name:get', async () => {
   try {
@@ -989,6 +1010,28 @@ ipcMain.handle('myvideos:start', async (_, options: { cookies: string; page: num
 
     const worker = new Worker(workerPath, {
       workerData: { type: 'myvideos', payload: options }
+    })
+
+    worker.on('message', (update) => {
+      BrowserWindow.getAllWindows().forEach(win => {
+        win.webContents.send('myvideos:progress', update)
+      })
+    })
+
+    worker.on('error', reject)
+    worker.on('exit', (code) => {
+      if (code === 0) resolve({ success: true })
+      else reject(new Error(`Worker exited with code ${code}`))
+    })
+  })
+})
+
+ipcMain.handle('myvideos:delete', async (_, options: { cookies: string; videoId: string }) => {
+  return new Promise((resolve, reject) => {
+    const workerPath = path.join(__dirname, '../workers/myvideos.worker.cjs')
+
+    const worker = new Worker(workerPath, {
+      workerData: { type: 'myvideos-delete', payload: options }
     })
 
     worker.on('message', (update) => {

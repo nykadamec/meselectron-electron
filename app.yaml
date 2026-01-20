@@ -1,8 +1,8 @@
 app:
   name: "prehrajto-autopilot"
   app_name: "Prehraj.to AutoPilot"
-  version: "0.1.2"
-  build: "260835"
+  version: "0.1.3"
+  buildNumber: "2620_1716"
   description: "Prehraj.to AutoPilot - Desktop application for video management"
   environment: "development"
 config:

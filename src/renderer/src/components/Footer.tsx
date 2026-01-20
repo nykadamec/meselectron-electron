@@ -1,15 +1,18 @@
 import { useEffect, useState } from 'react'
-import { getAppVersion, getAppName } from '../utils'
+import { getAppVersion, getAppName, getAppBuild } from '../utils'
 import { useLocaleStore } from '../i18n'
+import { get } from 'node:http'
 
 export function Footer() {
   const localeStore = useLocaleStore()
   const [version, setVersion] = useState<string>('')
   const [appName, setAppName] = useState<string>('')
+  const [appBuild, setAppBuild] = useState<string>('')
 
   useEffect(() => {
     getAppVersion().then(setVersion)
     getAppName().then(setAppName)
+    getAppBuild().then(setAppBuild)
   }, [])
 
   return (
@@ -28,7 +31,7 @@ export function Footer() {
       zIndex: 50
     }}>
       <span>{appName}</span>
-      <span style={{ fontSize: '90%' }}>v{version} | LANG: {localeStore.locale.toUpperCase()} | BUILD: 261601</span>
+      <span style={{ fontSize: '90%' }}>v{version} | LANG: {localeStore.locale.toUpperCase()} | BUILD: {appBuild}</span>
     </footer>
   )
 }

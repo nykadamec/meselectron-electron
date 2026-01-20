@@ -32,6 +32,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   versionGet: function() {
     return ipcRenderer.invoke('version:get')
   },
+  buildGet: function() {
+    return ipcRenderer.invoke('build:get')
+  },
   nameGet: function() {
     return ipcRenderer.invoke('name:get')
   },
@@ -82,6 +85,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   myVideosLoad: function(options) {
     return ipcRenderer.invoke('myvideos:start', options)
+  },
+  myVideosDelete: function(options) {
+    return ipcRenderer.invoke('myvideos:delete', options)
   },
   onLogMessage: function(callback) {
     ipcRenderer.on('log:message', callback)

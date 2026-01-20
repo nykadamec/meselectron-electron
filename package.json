@@ -1,9 +1,10 @@
 {
   "name": "prehrajto-autopilot",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Prehraj.to AutoPilot - Desktop application for video management",
   "main": "dist/main/index.js",
   "appName": "Prehraj.to AutoPilot",
+  "buildNumber": "2620_1716",
   "scripts": {
     "sync": "node scripts/sync-config.js",
     "sync:watch": "node --watch scripts/sync-config.js",

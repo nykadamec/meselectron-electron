@@ -1,8 +1,10 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useAppStore } from '../store'
 import { useLocaleStore } from '../i18n'
+import type { MyVideo } from '../types'
 import { MyVideosCard as VideoCard } from './MyVideosCard'
-import { RefreshCw, ChevronLeft, ChevronRight, PlayCircle } from 'lucide-react'
+import { DeleteConfirmationModal } from './DeleteConfirmationModal'
+import { RefreshCw, ChevronLeft, ChevronRight, PlayCircle, Search, X } from 'lucide-react'
 
 export function MyVideosList() {
   const { t } = useLocaleStore()
@@ -11,18 +13,30 @@ export function MyVideosList() {
     myVideos,
     myVideosPage,
     myVideosHasMore,
+    myVideosSearchQuery,
+    setMyVideosSearchQuery,
     isLoadingMyVideos,
     myVideosError,
     loadMyVideos,
     clearMyVideos,
+    deleteMyVideo,
     accounts
   } = useAppStore()
 
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false)
+  const [videoToDelete, setVideoToDelete] = useState<MyVideo | null>(null)
+  const [isDeleting, setIsDeleting] = useState(false)
+
   const activeAccount = accounts.find(acc => acc.isActive)
+
+  // Filter videos based on search query
+  const filteredVideos = myVideos.filter(video =>
+    video.title.toLowerCase().includes(myVideosSearchQuery.toLowerCase())
+  )
 
   const handleRefresh = async () => {
     if (!activeAccount || !window.electronAPI) return
-    
+
     try {
       const cookies = await window.electronAPI.accountsReadCookies(activeAccount.id)
       if (cookies) {
@@ -36,7 +50,7 @@ export function MyVideosList() {
 
   const handlePageChange = async (newPage: number) => {
     if (!activeAccount || !window.electronAPI || newPage < 1) return
-    
+
     try {
       const cookies = await window.electronAPI.accountsReadCookies(activeAccount.id)
       if (cookies) {
@@ -51,6 +65,36 @@ export function MyVideosList() {
 
   const handleJumpToPage = (e: React.ChangeEvent<HTMLSelectElement>) => {
     handlePageChange(parseInt(e.target.value, 10))
+  }
+
+  const handleDeleteClick = (video: MyVideo) => {
+    setVideoToDelete(video)
+    setDeleteModalOpen(true)
+  }
+
+  const handleDeleteConfirm = async () => {
+    if (!videoToDelete || !activeAccount) return
+
+    setIsDeleting(true)
+    try {
+      const cookies = await window.electronAPI.accountsReadCookies(activeAccount.id)
+      if (cookies) {
+        await deleteMyVideo(videoToDelete.id, cookies)
+      }
+    } catch (err) {
+      console.error('Failed to delete video:', err)
+    } finally {
+      setIsDeleting(false)
+      setVideoToDelete(null)
+    }
+  }
+
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setMyVideosSearchQuery(e.target.value)
+  }
+
+  const handleSearchClear = () => {
+    setMyVideosSearchQuery('')
   }
 
   // Auto-load on mount if empty
@@ -69,7 +113,17 @@ export function MyVideosList() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div ref={topRef} className="flex justify-between items-center">
+      {/* Delete Confirmation Modal */}
+      <DeleteConfirmationModal
+        video={videoToDelete}
+        open={deleteModalOpen}
+        onOpenChange={setDeleteModalOpen}
+        onConfirm={handleDeleteConfirm}
+        isDeleting={isDeleting}
+      />
+
+      {/* Header */}
+      <div ref={topRef} className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <h2 className="text-lg font-semibold flex items-center gap-2">
           <PlayCircle className="w-5 h-5 text-accent" />
           {t('nav.myVideos')}
@@ -84,26 +138,100 @@ export function MyVideosList() {
         </button>
       </div>
 
+      {/* Search Input */}
+      <div className="relative">
+        <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-3 h-3 text-text-muted" />
+        <input
+          type="text"
+          placeholder={t('search.placeholder')}
+          value={myVideosSearchQuery}
+          onChange={handleSearchChange}
+          className="input-base pl-12 pr-10"
+        />
+        {myVideosSearchQuery && (
+          <button
+            onClick={handleSearchClear}
+            className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-text-muted hover:text-text-primary transition-colors"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        )}
+      </div>
+
       {myVideosError && (
         <div className="p-4 bg-red-500/10 border border-red-500 rounded-lg">
           <p className="text-red-500 text-sm">{myVideosError}</p>
         </div>
       )}
 
-      {myVideos.length > 0 ? (
+      {filteredVideos.length > 0 ? (
         <div className="card-base">
           <div className="flex flex-col divide-y divide-border">
-            {myVideos.map((video) => (
-              <VideoCard key={video.id} video={video} />
+            {filteredVideos.map((video) => (
+              <VideoCard key={video.id} video={video} onDeleteClick={handleDeleteClick} />
             ))}
+          </div>
+        </div>
+      ) : myVideos.length === 0 && !isLoadingMyVideos && process.env.NODE_ENV === 'development' ? (
+        // Demo mode for testing new design
+        <div className="card-base">
+          <div className="flex flex-col divide-y divide-border">
+            <VideoCard
+              video={{
+                id: 'demo1',
+                title: 'Toto je ukázkové video s dlouhým názvem pro testování',
+                thumbnail: 'https://picsum.photos/seed/video1/320/180',
+                views: 12543,
+                addedAt: new Date().toISOString(),
+                url: 'https://example.com/video1',
+                size: '1.2 GB',
+                likes: 342,
+                dislikes: 12,
+              }}
+              onDeleteClick={() => {}}
+            />
+            <VideoCard
+              video={{
+                id: 'demo2',
+                title: 'Krátké video',
+                thumbnail: 'https://picsum.photos/seed/video2/320/180',
+                views: 890,
+                addedAt: new Date(Date.now() - 86400000).toISOString(),
+                url: 'https://example.com/video2',
+                size: '456 MB',
+                likes: 45,
+                dislikes: 3,
+              }}
+              onDeleteClick={() => {}}
+            />
+            <VideoCard
+              video={{
+                id: 'demo3',
+                title: 'Video bez thumbnailu',
+                thumbnail: undefined,
+                views: 1500000,
+                addedAt: new Date(Date.now() - 172800000).toISOString(),
+                url: 'https://example.com/video3',
+                size: '3.4 GB',
+                likes: 12543,
+                dislikes: 89,
+              }}
+              onDeleteClick={() => {}}
+            />
           </div>
         </div>
       ) : (
         !isLoadingMyVideos && (
           <div className="text-center py-12 bg-surface border border-dashed border-border rounded-xl">
             <PlayCircle className="w-12 h-12 text-text-muted mx-auto mb-4" />
-            <p className="text-text-secondary">{t('empty.myVideos')}</p>
-            <p className="text-xs text-text-muted mt-2">{t('empty.myVideosHelp')}</p>
+            <p className="text-text-secondary">
+              {myVideosSearchQuery ? t('search.noResults') : t('empty.myVideos')}
+            </p>
+            <p className="text-xs text-text-muted mt-2">
+              {myVideosSearchQuery
+                ? t('empty.myVideosHelp')
+                : t('empty.myVideosHelp')}
+            </p>
           </div>
         )
       )}
@@ -114,7 +242,7 @@ export function MyVideosList() {
         </div>
       )}
 
-      {/* Improved Paginator */}
+      {/* Pagination */}
       {(myVideos.length > 0 || myVideosPage > 1) && !isLoadingMyVideos && (
         <div className="flex justify-center items-center gap-4 mt-4 bg-surface p-3 rounded-lg border border-border shadow-sm">
           <button
@@ -125,11 +253,11 @@ export function MyVideosList() {
           >
             <ChevronLeft className="w-5 h-5" />
           </button>
-          
+
           <div className="flex items-center gap-2">
-            <span className="text-sm font-medium text-text-muted">Stránka</span>
-            <select 
-              value={myVideosPage} 
+            <span className="text-sm font-medium text-text-muted">{t('pagination.page')}</span>
+            <select
+              value={myVideosPage}
               onChange={handleJumpToPage}
               className="bg-bg-hover border border-border rounded px-2 py-1 text-sm font-bold focus:outline-none focus:ring-1 focus:ring-accent cursor-pointer"
             >
@@ -138,6 +266,7 @@ export function MyVideosList() {
                 <option key={p} value={p}>{p}</option>
               ))}
             </select>
+            <span className="text-sm text-text-muted">{t('pagination.of')}</span>
           </div>
 
           <button

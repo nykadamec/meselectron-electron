@@ -109,12 +109,15 @@ interface AppState {
   myVideos: MyVideo[]
   myVideosPage: number
   myVideosHasMore: boolean
+  myVideosSearchQuery: string
+  setMyVideosSearchQuery: (query: string) => void
   isLoadingMyVideos: boolean
   myVideosError: string | null
   setMyVideos: (videos: MyVideo[], hasMore: boolean) => void
   addMyVideos: (videos: MyVideo[], hasMore: boolean) => void
   loadMyVideos: (page: number, cookies: string) => Promise<void>
   clearMyVideos: () => void
+  deleteMyVideo: (videoId: string, cookies: string) => Promise<void>
   isProcessing: boolean
   setIsProcessing: (processing: boolean) => void
 
@@ -270,6 +273,8 @@ export const useAppStore = create<AppState>((set) => ({
   myVideos: [],
   myVideosPage: 1,
   myVideosHasMore: true,
+  myVideosSearchQuery: '',
+  setMyVideosSearchQuery: (query) => set({ myVideosSearchQuery: query }),
   isLoadingMyVideos: false,
   myVideosError: null,
   setMyVideos: (videos, hasMore) =>
@@ -291,6 +296,7 @@ export const useAppStore = create<AppState>((set) => ({
       myVideos: [],
       myVideosPage: 1,
       myVideosHasMore: true,
+      myVideosSearchQuery: '',
       isLoadingMyVideos: false,
       myVideosError: null
     }),

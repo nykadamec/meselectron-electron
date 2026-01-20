@@ -229,6 +229,26 @@ const fallbackTranslations: Record<string, string> = {
   'accounts.status': 'Status',
   'accounts.connected': 'Connected',
   'accounts.disconnected': 'Disconnected',
+
+  // Stats
+  'stats.points': '{count} points',
+
+  // Pagination
+  'pagination.page': 'Page',
+  'pagination.of': 'of',
+
+  // Search
+  'search.placeholder': 'Search videos...',
+  'search.noResults': 'No videos found',
+  'search.resultsCount': '{count} videos',
+
+  // Delete
+  'delete.title': 'Delete video?',
+  'delete.message': 'Are you sure you want to delete video "{title}"?',
+  'delete.confirm': 'Delete',
+  'delete.cancel': 'Cancel',
+  'delete.success': 'Video was deleted',
+  'delete.error': 'Failed to delete video',
 }
 
 // Load translations from file

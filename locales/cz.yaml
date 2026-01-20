@@ -197,3 +197,20 @@ nav.myVideos: "Moje videa"
 
 # Stats
 stats.points: "{count} bodů"
+
+# Pagination
+pagination.page: "Stránka"
+pagination.of: "z"
+
+# Search
+search.placeholder: "Hledat videa..."
+search.noResults: "Žádná videa nenalezena"
+search.resultsCount: "{count} videí"
+
+# Delete
+delete.title: "Smazat video?"
+delete.message: "Opravdu chcete smazat video „{title}“?"
+delete.confirm: "Smazat"
+delete.cancel: "Zrušit"
+delete.success: "Video bylo smazáno"
+delete.error: "Nepodařilo se smazat video"

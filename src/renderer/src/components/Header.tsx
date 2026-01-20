@@ -55,7 +55,7 @@ export function Header() {
   }
 
   return (
-    <header style={{
+    <header data-elname="app-header" style={{
       backgroundColor: 'var(--color-surface-base)',
       borderBottom: '1px solid var(--color-border-base)',
       padding: '12px 16px',
@@ -65,7 +65,7 @@ export function Header() {
       WebkitAppRegion: 'drag'
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-        <div style={{
+        <div data-elname="logo-container" style={{
           width: 32,
           height: 32,
           backgroundColor: 'var(--color-accent-base)',
@@ -77,20 +77,21 @@ export function Header() {
           <UploadCloud style={{ width: 18, height: 18, color: 'white' }} />
         </div>
         <div>
-          <h1 style={{ fontWeight: 600, fontSize: 15, color: 'var(--color-text-primary)' }}>{t('header.title')}</h1>
-          <p style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>{t('header.subtitle')}</p>
+          <h1 data-elname="app-title" style={{ fontWeight: 600, fontSize: 15, color: 'var(--color-text-primary)' }}>{t('header.title')}</h1>
+          <p data-elname="app-subtitle" style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>{t('header.subtitle')}</p>
         </div>
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, WebkitAppRegion: 'no-drag' }}>
         {isProcessing && (
-          <span style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--color-accent-base)' }}>
+          <span data-elname="processing-indicator" style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--color-accent-base)' }}>
             <span style={{ width: 8, height: 8, backgroundColor: 'var(--color-accent-base)', borderRadius: '50%', animation: 'pulse 2s infinite' }}></span>
             {t('header.processing')}
           </span>
         )}
 
         <button
+          data-elname="refresh-button"
           onClick={handleRefresh}
           style={{
             padding: 8,
@@ -111,6 +112,7 @@ export function Header() {
         </button>
 
         <button
+          data-elname="settings-button"
           onClick={() => useAppStore.getState().setActiveTab('settings')}
           style={{
             padding: 8,
@@ -131,6 +133,7 @@ export function Header() {
         </button>
 
         <button
+          data-elname="minimize-button"
           onClick={handleMinimize}
           style={{
             padding: 8,

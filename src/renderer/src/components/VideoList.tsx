@@ -134,12 +134,13 @@ export function VideoList() {
   }
 
   return (
-    <div className="h-full flex flex-col">
+    <div data-elname="video-list" className="h-full flex flex-col">
       {/* Header */}
-      <div className="flex justify-between items-center mb-4 flex-shrink-0">
-        <h2 className="text-lg font-medium">Videa</h2>
-        <div className="flex gap-2">
+      <div data-elname="video-list-header" className="flex justify-between items-center mb-4 flex-shrink-0">
+        <h2 data-elname="video-list-title" className="text-lg font-medium">Videa</h2>
+        <div data-elname="list-controls" className="flex gap-2">
           <button
+            data-elname={selectedCandidates.length > 0 ? 'deselect-all-button' : 'select-all-button'}
             onClick={selectedCandidates.length > 0 ? handleDeselectAll : handleSelectAllAvailable}
             disabled={availableVideos.length === 0 || isDiscovering}
             className="btn-secondary text-sm disabled:opacity-50"
@@ -147,6 +148,7 @@ export function VideoList() {
             {selectedCandidates.length > 0 ? 'Odebrat vše' : 'Vybrat vše'}
           </button>
           <button
+            data-elname="process-button"
             onClick={handleProcessSelected}
             disabled={selectedCandidates.length === 0 || isProcessing || isDiscovering}
             className="btn-primary text-sm disabled:opacity-50"
@@ -154,6 +156,7 @@ export function VideoList() {
             Process ({selectedCandidates.length})
           </button>
           <button
+            data-elname="refresh-button"
             onClick={handleRefresh}
             disabled={isDiscovering}
             className="btn-secondary text-sm disabled:opacity-50"
@@ -165,13 +168,14 @@ export function VideoList() {
 
       {/* Discovery progress bar */}
       {isDiscovering && (
-        <div className="mb-4 flex-shrink-0">
+        <div data-elname="discover-progress" className="mb-4 flex-shrink-0">
           <div className="flex justify-between text-sm mb-1">
-            <span>{discoverMessage}</span>
-            <span>{Math.round(discoverProgress)}%</span>
+            <span data-elname="progress-label">{discoverMessage}</span>
+            <span data-elname="progress-percent">{Math.round(discoverProgress)}%</span>
           </div>
-          <div className="w-full bg-bg-hover rounded-full h-2">
+          <div data-elname="progress-track" className="w-full bg-bg-hover rounded-full h-2">
             <div
+              data-elname="progress-fill"
               className="bg-accent h-2 rounded-full transition-all"
               style={{ width: `${discoverProgress}%` }}
             />
@@ -180,19 +184,19 @@ export function VideoList() {
       )}
 
       {/* Scrollable video list */}
-      <div className="flex-1 overflow-y-auto space-y-1 pr-2 custom-scrollbar">
+      <div data-elname="video-scroll" className="flex-1 overflow-y-auto space-y-1 pr-2 custom-scrollbar">
         {/* No videos state */}
         {!isDiscovering && videoCandidates.length === 0 && (
-          <div className="text-center py-12">
-            <p className="text-text-muted">Žádná videa</p>
-            <p className="text-xs text-text-muted mt-2">Klikněte na "Obnovit" pro načtení videí</p>
+          <div data-elname="no-videos-state" className="text-center py-12">
+            <p data-elname="empty-title" className="text-text-muted">Žádná videa</p>
+            <p data-elname="empty-help" className="text-xs text-text-muted mt-2">Klikněte na "Obnovit" pro načtení videí</p>
           </div>
         )}
 
         {/* Processed videos section */}
         {processedVideos.length > 0 && (
           <>
-            <h3 className="text-sm text-text-muted uppercase tracking-wider mt-4 mb-2 sticky top-0 bg-bg-main py-1">
+            <h3 data-elname="section-title" className="text-sm text-text-muted uppercase tracking-wider mt-4 mb-2 sticky top-0 bg-bg-main py-1">
               Již zpracovaná ({processedVideos.length})
             </h3>
             {processedVideos.map(video => (
@@ -208,7 +212,7 @@ export function VideoList() {
         {/* Available videos section */}
         {availableVideos.length > 0 && (
           <>
-            <h3 className={`text-sm text-text-muted uppercase tracking-wider mt-4 mb-2 sticky top-0 bg-bg-main py-1 ${processedVideos.length > 0 ? '' : ''}`}>
+            <h3 data-elname="section-title" className={`text-sm text-text-muted uppercase tracking-wider mt-4 mb-2 sticky top-0 bg-bg-main py-1 ${processedVideos.length > 0 ? '' : ''}`}>
               K dispozici ({availableVideos.length})
             </h3>
             {availableVideos.map(video => (
@@ -224,7 +228,7 @@ export function VideoList() {
 
         {/* Empty available section */}
         {!isDiscovering && processedVideos.length > 0 && availableVideos.length === 0 && (
-          <div className="text-center py-8">
+          <div data-elname="no-available-videos" className="text-center py-8">
             <p className="text-text-muted">Žádná nová videa</p>
           </div>
         )}

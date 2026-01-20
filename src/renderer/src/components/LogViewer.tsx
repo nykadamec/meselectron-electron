@@ -35,11 +35,12 @@ export function LogViewer({ logs }: LogViewerProps) {
   }
 
   return (
-    <div className="space-y-4">
+    <div data-elname="log-viewer" className="space-y-4">
       {/* Filter controls */}
-      <div className="flex gap-2 flex-wrap">
+      <div data-elname="filter-controls" className="flex gap-2 flex-wrap">
         {(['all', 'info', 'success', 'warning', 'error'] as const).map((level) => (
           <button
+            data-elname="filter-btn"
             key={level}
             onClick={() => setFilter(level)}
             className={`px-3 py-1 rounded-lg text-sm transition-colors ${
@@ -54,24 +55,24 @@ export function LogViewer({ logs }: LogViewerProps) {
       </div>
 
       {/* Log output */}
-      <div className="bg-bg-card rounded-xl border border-border p-4 font-mono text-sm">
-        <div className="space-y-1 max-h-[500px] overflow-y-auto">
+      <div data-elname="log-output" className="bg-bg-card rounded-xl border border-border p-4 font-mono text-sm">
+        <div data-elname="log-entries" className="space-y-1 max-h-[500px] overflow-y-auto">
           {filteredLogs.length === 0 ? (
-            <p className="text-text-muted">Žádné logy</p>
+            <p data-elname="empty-logs" className="text-text-muted">Žádné logy</p>
           ) : (
             filteredLogs.map((log) => (
-              <div key={log.id} className="flex gap-2">
-                <span className="text-text-muted flex-shrink-0">
+              <div data-elname="log-entry" key={log.id} className="flex gap-2">
+                <span data-elname="log-timestamp" className="text-text-muted flex-shrink-0">
                   [{formatTime(log.timestamp)}]
                 </span>
-                <span className={logLevelColors[log.level]}>
+                <span data-elname="log-level-icon" className={logLevelColors[log.level]}>
                   {logLevelIcons[log.level]}
                 </span>
-                <span className="text-text-primary break-all">
+                <span data-elname="log-message" className="text-text-primary break-all">
                   {log.message}
                 </span>
                 {log.source && (
-                  <span className="text-text-muted flex-shrink-0">
+                  <span data-elname="log-source" className="text-text-muted flex-shrink-0">
                     [{log.source}]
                   </span>
                 )}
@@ -81,7 +82,7 @@ export function LogViewer({ logs }: LogViewerProps) {
         </div>
       </div>
 
-      <p className="text-xs text-text-muted">
+      <p data-elname="log-count" className="text-xs text-text-muted">
         Zobrazeno {filteredLogs.length} z {logs.length} logů
       </p>
     </div>

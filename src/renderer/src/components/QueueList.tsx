@@ -116,6 +116,7 @@ function SortableQueueItem({
 
   return (
     <div
+      data-elname="queue-item"
       ref={setNodeRef}
       style={{
         ...style,
@@ -136,6 +137,7 @@ function SortableQueueItem({
             {/* Status indicator or Drag handle/Kill button */}
             {item.status === 'active' && onKill ? (
               <button
+                data-elname="kill-button"
                 onClick={() => onKill(item.id)}
                 style={{
                   padding: 4,
@@ -159,6 +161,7 @@ function SortableQueueItem({
               </button>
             ) : (
               <button
+                data-elname="drag-handle"
                 style={{
                   padding: 4,
                   backgroundColor: 'transparent',
@@ -184,7 +187,7 @@ function SortableQueueItem({
 
             {/* Animated status dot for active items */}
             {item.status === 'active' && (
-              <div style={{
+              <div data-elname="active-dot" style={{
                 width: 8,
                 height: 8,
                 borderRadius: '50%',
@@ -196,7 +199,7 @@ function SortableQueueItem({
 
             {/* Size indicator */}
             {item.size && (
-              <span style={{
+              <span data-elname="size-badge" style={{
                 fontSize: 11,
                 color: 'var(--color-text-muted)',
                 fontFamily: 'monospace',
@@ -209,7 +212,7 @@ function SortableQueueItem({
             )}
 
             {/* Title */}
-            <span style={{
+            <span data-elname="item-title" style={{
               fontSize: 13,
               fontWeight: 500,
               color: 'var(--color-text-primary)',
@@ -231,7 +234,7 @@ function SortableQueueItem({
                 alignItems: 'center',
                 marginBottom: 8
               }}>
-                <span style={{
+                <span data-elname="phase-label" style={{
                   fontSize: 12,
                   color: 'var(--color-accent-base)',
                   fontWeight: 500
@@ -240,7 +243,7 @@ function SortableQueueItem({
                    item.subPhase === 'assembling' ? t('queue.assembling') :
                    t('queue.downloadPhase')}
                 </span>
-                <span style={{
+                <span data-elname="progress-percent" style={{
                   fontSize: 12,
                   color: 'var(--color-accent-base)',
                   fontWeight: 600
@@ -250,7 +253,7 @@ function SortableQueueItem({
               </div>
 
               {/* Progress bar - VYŠŠÍ A VIDITELNĚJŠÍ */}
-              <div style={{
+              <div data-elname="progress-bar" style={{
                 height: 10,
                 backgroundColor: 'var(--color-surface-base)',
                 borderRadius: 5,
@@ -258,7 +261,7 @@ function SortableQueueItem({
                 border: '1px solid var(--color-border-base)',
                 marginBottom: 10
               }}>
-                <div style={{
+                <div data-elname="progress-fill" style={{
                   width: `${progressPercent}%`,
                   height: '100%',
                   backgroundColor: statusColor,
@@ -269,7 +272,7 @@ function SortableQueueItem({
 
               {/* Status message */}
               {item.statusMessage && (
-                <div style={{
+                <div data-elname="status-message" style={{
                   fontSize: 11,
                   color: 'var(--color-accent-base)',
                   fontFamily: 'monospace',
@@ -280,15 +283,15 @@ function SortableQueueItem({
               )}
 
               {/* Stats row */}
-              <div style={{
+              <div data-elname="item-stats" style={{
                 display: 'flex',
                 gap: 16,
                 fontSize: 11,
                 color: 'var(--color-text-muted)'
               }}>
-                <span>{formatSize(item.size)}</span>
-                <span>{formatSpeed(item.speed)}</span>
-                <span>ETA: {formatETA(item.eta)}</span>
+                <span data-elname="size-text">{formatSize(item.size)}</span>
+                <span data-elname="speed-text">{formatSpeed(item.speed)}</span>
+                <span data-elname="eta-text">ETA: {formatETA(item.eta)}</span>
               </div>
             </div>
           )}
@@ -303,13 +306,13 @@ function SortableQueueItem({
               fontSize: 11,
               color: 'var(--color-text-muted)'
             }}>
-              {item.size && <span>{formatSize(item.size)}</span>}
-              <span style={{
+              {item.size && <span data-elname="size-text">{formatSize(item.size)}</span>}
+              <span data-elname="status-text" style={{
                 color: statusColor,
                 fontWeight: 500
               }}>{getStatusLabel(item.status)}</span>
               {item.error && (
-                <span style={{ color: 'var(--color-error)' }}>
+                <span data-elname="error-text" style={{ color: 'var(--color-error)' }}>
                   ({item.error})
                 </span>
               )}
@@ -319,7 +322,7 @@ function SortableQueueItem({
 
         {/* Right side - Priority number and Remove button */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{
+          <span data-elname="priority-number" style={{
             fontSize: 11,
             color: 'var(--color-text-muted)',
             fontWeight: 500
@@ -330,6 +333,7 @@ function SortableQueueItem({
           {/* Remove button (only for non-active pending/failed items) */}
           {onRemove && item.status !== 'active' && (
             <button
+              data-elname="remove-button"
               onClick={() => onRemove(item.id)}
               style={{
                 padding: 4,
@@ -447,9 +451,9 @@ export function QueueList({
   }
 
   return (
-    <div className="space-y-2">
+    <div data-elname="queue-container" className="space-y-2">
       {/* Queue stats */}
-      <div className="flex justify-end items-center text-sm text-text-muted">
+      <div data-elname="queue-stats" className="flex justify-end items-center text-sm text-text-muted">
         <span>{t('queue.stats', { pending: String(pendingCount), failed: String(failedCount) })}</span>
       </div>
 
@@ -464,7 +468,7 @@ export function QueueList({
           items={items.map(item => item.id)}
           strategy={verticalListSortingStrategy}
         >
-          <div className="max-h-60 overflow-y-auto space-y-2">
+          <div data-elname="queue-scroll" className="max-h-60 overflow-y-auto space-y-2">
             {items.map((item) => (
               <SortableQueueItem
                 key={item.id}
@@ -480,24 +484,24 @@ export function QueueList({
 
       {/* Queue controls */}
       {(onPause || onResume || onCancel || onRetry) && (
-        <div className="flex gap-2 mt-2">
+        <div data-elname="queue-controls" className="flex gap-2 mt-2">
           {onPause && !isQueuePaused && (
-            <button onClick={onPause} className="btn-secondary text-xs px-3 py-1">
+            <button data-elname="queue-pause-btn" onClick={onPause} className="btn-secondary text-xs px-3 py-1">
               {t('queue.pause')}
             </button>
           )}
           {onResume && isQueuePaused && (
-            <button onClick={onResume} className="btn-secondary text-xs px-3 py-1">
+            <button data-elname="queue-resume-btn" onClick={onResume} className="btn-secondary text-xs px-3 py-1">
               {t('queue.resume')}
             </button>
           )}
           {onRetry && failedCount > 0 && (
-            <button onClick={onRetry} className="btn-secondary text-xs px-3 py-1">
+            <button data-elname="queue-retry-btn" onClick={onRetry} className="btn-secondary text-xs px-3 py-1">
               {t('queue.retry', { count: String(failedCount) })}
             </button>
           )}
           {onCancel && items.length > 0 && (
-            <button onClick={onCancel} className="btn-error text-xs px-3 py-1">
+            <button data-elname="queue-cancel-btn" onClick={onCancel} className="btn-error text-xs px-3 py-1">
               {t('queue.cancelQueue')}
             </button>
           )}

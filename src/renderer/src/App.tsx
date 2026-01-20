@@ -266,10 +266,10 @@ function App() {
 
   if (isLoading) {
     return (
-      <div style={{ minHeight: '100vh', backgroundColor: 'var(--color-background-base)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <div style={{ textAlign: 'center' }}>
-          <div className="spinner" style={{ margin: '0 auto 16px', width: 48, height: 48 }} />
-          <p style={{ color: 'var(--color-text-secondary)' }}>
+      <div data-elname="loading-container" style={{ minHeight: '100vh', backgroundColor: 'var(--color-background-base)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div data-elname="loading-content" style={{ textAlign: 'center' }}>
+          <div data-elname="loading-spinner" className="spinner" style={{ margin: '0 auto 16px', width: 48, height: 48 }} />
+          <p data-elname="loading-text" style={{ color: 'var(--color-text-secondary)' }}>
             {loginEmail ? `Přihlašování jako ${loginEmail}...` : 'Načítání...'}
           </p>
         </div>
@@ -278,55 +278,55 @@ function App() {
   }
 
   return (
-    <div style={{ minHeight: '100vh', backgroundColor: 'var(--color-background-base)', color: 'var(--color-text-primary)', display: 'flex', flexDirection: 'column' }}>
+    <div data-elname="app-container" style={{ minHeight: '100vh', backgroundColor: 'var(--color-background-base)', color: 'var(--color-text-primary)', display: 'flex', flexDirection: 'column' }}>
       <Header />
-      <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+      <div data-elname="content-wrapper" style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
         {/* Sidebar */}
-        <aside style={{ width: 260, backgroundColor: 'var(--color-surface-base)', borderRight: '1px solid var(--color-border-base)', display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
+        <aside data-elname="sidebar" style={{ width: 260, backgroundColor: 'var(--color-surface-base)', borderRight: '1px solid var(--color-border-base)', display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
           <ScrollArea.Root style={{ flex: 1, overflow: 'hidden' }}>
             <ScrollArea.Viewport style={{ width: '100%', height: '100%' }}>
-              <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 20 }}>
+              <div data-elname="sidebar-content" style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 20 }}>
                 {/* Accounts Section - First */}
-                <div>
-                  <p style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 8, paddingLeft: 12 }}>{localeStore.t('accounts.accounts')}</p>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <div data-elname="accounts-section">
+                  <p data-elname="accounts-header" style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 8, paddingLeft: 12 }}>{localeStore.t('accounts.accounts')}</p>
+                  <div data-elname="accounts-list" style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                     {accounts.map((account) => (
-                      <div key={account.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', backgroundColor: 'var(--color-surface-elevated)', borderRadius: 8, border: '1px solid var(--color-border-base)', transition: 'border-color 0.15s ease' }}>
-                        <Avatar.Root style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 28, height: 28, borderRadius: '50%', backgroundColor: account.isActive ? 'var(--color-success)' : 'var(--color-text-muted)', overflow: 'hidden', flexShrink: 0 }}>
-                          <Avatar.Fallback style={{ fontSize: 12, fontWeight: 600, color: 'white' }}>{account.email[0].toUpperCase()}</Avatar.Fallback>
+                      <div data-elname={`account-item-${account.id}`} key={account.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', backgroundColor: 'var(--color-surface-elevated)', borderRadius: 8, border: '1px solid var(--color-border-base)', transition: 'border-color 0.15s ease' }}>
+                        <Avatar.Root data-elname="account-avatar" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 28, height: 28, borderRadius: '50%', backgroundColor: account.isActive ? 'var(--color-success)' : 'var(--color-text-muted)', overflow: 'hidden', flexShrink: 0 }}>
+                          <Avatar.Fallback data-elname="account-fallback" style={{ fontSize: 12, fontWeight: 600, color: 'white' }}>{account.email[0].toUpperCase()}</Avatar.Fallback>
                         </Avatar.Root>
-                        <div style={{ flex: 1, minWidth: 0, lineHeight: '15px'}}>
-                          <p style={{ fontSize: 13, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{account.email.split('@')[0]}</p>
+                        <div data-elname="account-info" style={{ flex: 1, minWidth: 0, lineHeight: '15px'}}>
+                          <p data-elname="account-name" style={{ fontSize: 13, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{account.email.split('@')[0]}</p>
                           {account.credits !== undefined && (
-                            <span style={{ fontSize: 11, color: 'var(--color-accent-base)' }}>
+                            <span data-elname="account-credits" style={{ fontSize: 11, color: 'var(--color-accent-base)' }}>
                               {account.credits} kred
                             </span>
                           )}
                         </div>
-                        {account.isActive && <div style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: 'var(--color-success)', flexShrink: 0 }} />}
+                        {account.isActive && <div data-elname="active-indicator" style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: 'var(--color-success)', flexShrink: 0 }} />}
                       </div>
                     ))}
-                    {accounts.length === 0 && <p style={{ fontSize: 13, color: 'var(--color-text-muted)', paddingLeft: 12 }}>{localeStore.t('accounts.noAccounts')}</p>}
+                    {accounts.length === 0 && <p data-elname="no-accounts" style={{ fontSize: 13, color: 'var(--color-text-muted)', paddingLeft: 12 }}>{localeStore.t('accounts.noAccounts')}</p>}
                   </div>
                 </div>
-                <Separator.Root style={{ backgroundColor: 'var(--color-border-base)', height: 1 }} />
+                <Separator.Root data-elname="separator-accounts" style={{ backgroundColor: 'var(--color-border-base)', height: 1 }} />
 
                 {/* Navigation Section - Second */}
-                <nav style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                  <p style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 4, paddingLeft: 12 }}>Navigace</p>
+                <nav data-elname="navigation-section" style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <p data-elname="nav-header" style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 4, paddingLeft: 12 }}>Navigace</p>
                   {navItems.map((item) => (
-                    <button key={item.id} onClick={() => setActiveTab(item.id as typeof activeTab)} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 8, border: 'none', backgroundColor: activeTab === item.id ? 'var(--color-accent-muted)' : 'transparent', color: activeTab === item.id ? 'var(--color-accent-base)' : 'var(--color-text-secondary)', cursor: 'pointer', fontSize: 14, fontWeight: 500, transition: 'all 0.15s ease', textAlign: 'left' }}>
-                      <item.icon style={{ width: 18, height: 18 }} />
-                      {item.label}
-                      {activeTab === item.id && <div style={{ marginLeft: 'auto', width: 8, height: 8, borderRadius: '50%', backgroundColor: 'var(--color-accent-base)' }} />}
+                    <button data-elname={`nav-item-${item.id}`} key={item.id} onClick={() => setActiveTab(item.id as typeof activeTab)} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 8, border: 'none', backgroundColor: activeTab === item.id ? 'var(--color-accent-muted)' : 'transparent', color: activeTab === item.id ? 'var(--color-accent-base)' : 'var(--color-text-secondary)', cursor: 'pointer', fontSize: 14, fontWeight: 500, transition: 'all 0.15s ease', textAlign: 'left' }}>
+                      <item.icon data-elname="nav-icon" style={{ width: 18, height: 18 }} />
+                      <span data-elname="nav-label">{item.label}</span>
+                      {activeTab === item.id && <div data-elname="nav-active-indicator" style={{ marginLeft: 'auto', width: 8, height: 8, borderRadius: '50%', backgroundColor: 'var(--color-accent-base)' }} />}
                     </button>
                   ))}
                 </nav>
-                <Separator.Root style={{ backgroundColor: 'var(--color-border-base)', height: 1 }} />
+                <Separator.Root data-elname="separator-nav" style={{ backgroundColor: 'var(--color-border-base)', height: 1 }} />
 
                 {/* Statistics Section - Enhanced */}
-                <div style={{ backgroundColor: 'var(--color-surface-elevated)', borderRadius: 10, padding: 12, border: '1px solid var(--color-border-base)' }}>
-                  <p style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 12 }}>Statistiky</p>
+                <div data-elname="stats-section" style={{ backgroundColor: 'var(--color-surface-elevated)', borderRadius: 10, padding: 12, border: '1px solid var(--color-border-base)' }}>
+                  <p data-elname="stats-header" style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 12 }}>Statistiky</p>
                   <StatsPanel stats={stats} accounts={accounts} />
                 </div>
               </div>
@@ -338,33 +338,33 @@ function App() {
         </aside>
 
         {/* Main Content */}
-        <main style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden' }}>
+        <main data-elname="main-content" style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden' }}>
           <ScrollArea.Root style={{ flex: 1, overflow: 'hidden' }}>
             <ScrollArea.Viewport style={{ width: '100%', height: '100%' }}>
-              <div style={{ padding: 24, paddingBottom: 80 }}>
+              <div data-elname="tab-content" style={{ padding: 24, paddingBottom: 80 }}>
                 {activeTab === 'videos' && <VideoList />}
                 {activeTab === 'downloads' && (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                  <div data-elname="queue-section" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                     {queue.length > 0 && (
-                      <div className="card-base">
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                          <h3 style={{ fontWeight: 600, fontSize: 16 }}>Fronta ({queue.length})</h3>
-                          <div style={{ display: 'flex', gap: 8 }}>
-                            {isQueuePaused ? <button onClick={resumeQueue} className="btn-secondary" style={{ fontSize: 13, padding: '6px 12px' }}>Pokračovat</button> : <button onClick={pauseQueue} className="btn-secondary" style={{ fontSize: 13, padding: '6px 12px' }}>Pozastavit</button>}
-                            {queue.some(item => item.status === 'failed') && <button onClick={retryFailedItems} className="btn-secondary" style={{ fontSize: 13, padding: '6px 12px' }}>Zkusit znovu</button>}
-                            <button onClick={clearQueue} className="btn-secondary" style={{ fontSize: 13, padding: '6px 12px', color: 'var(--color-error)' }}>Vyčistit</button>
+                      <div data-elname="queue-container" className="card-base">
+                        <div data-elname="queue-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                          <h3 data-elname="queue-title" style={{ fontWeight: 600, fontSize: 16 }}>Fronta ({queue.length})</h3>
+                          <div data-elname="queue-controls" style={{ display: 'flex', gap: 8 }}>
+                            {isQueuePaused ? <button data-elname="resume-button" onClick={resumeQueue} className="btn-secondary" style={{ fontSize: 13, padding: '6px 12px' }}>Pokračovat</button> : <button data-elname="pause-button" onClick={pauseQueue} className="btn-secondary" style={{ fontSize: 13, padding: '6px 12px' }}>Pozastavit</button>}
+                            {queue.some(item => item.status === 'failed') && <button data-elname="retry-button" onClick={retryFailedItems} className="btn-secondary" style={{ fontSize: 13, padding: '6px 12px' }}>Zkusit znovu</button>}
+                            <button data-elname="clear-button" onClick={clearQueue} className="btn-secondary" style={{ fontSize: 13, padding: '6px 12px', color: 'var(--color-error)' }}>Vyčistit</button>
                           </div>
                         </div>
                         <QueueList queue={queue} isQueuePaused={isQueuePaused} onPause={pauseQueue} onResume={resumeQueue} onCancel={clearQueue} onRetry={retryFailedItems} onRemove={removeFromQueue} onReorder={reorderQueue} onKill={handleKillItem} />
                       </div>
                     )}
                     {queue.length === 0 && (
-                      <div style={{ textAlign: 'center', padding: '48px 24px', backgroundColor: 'var(--color-surface-base)', borderRadius: 12, border: '1px dashed var(--color-border-base)' }}>
-                        <div style={{ width: 48, height: 48, margin: '0 auto 16px', borderRadius: '50%', backgroundColor: 'var(--color-surface-elevated)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                          <Download style={{ width: 24, height: 24, color: 'var(--color-text-muted)' }} />
+                      <div data-elname="empty-queue" style={{ textAlign: 'center', padding: '48px 24px', backgroundColor: 'var(--color-surface-base)', borderRadius: 12, border: '1px dashed var(--color-border-base)' }}>
+                        <div data-elname="empty-icon-container" style={{ width: 48, height: 48, margin: '0 auto 16px', borderRadius: '50%', backgroundColor: 'var(--color-surface-elevated)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <Download data-elname="empty-icon" style={{ width: 24, height: 24, color: 'var(--color-text-muted)' }} />
                         </div>
-                        <p style={{ color: 'var(--color-text-secondary)', marginBottom: 8 }}>Prázdná fronta</p>
-                        <p style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>Přidejte videa z karty "Objevit videa"</p>
+                        <p data-elname="empty-title" style={{ color: 'var(--color-text-secondary)', marginBottom: 8 }}>Prázdná fronta</p>
+                        <p data-elname="empty-help" style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>Přidejte videa z karty "Objevit videa"</p>
                       </div>
                     )}
                   </div>

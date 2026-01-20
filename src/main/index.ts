@@ -16,7 +16,7 @@ function createWindow() {
       contextIsolation: true,
       sandbox: true
     },
-    titleBarStyle: 'hidden',
+    titleBarStyle: 'customButtonsOnHover',
     titleBarOverlay: {
       color: '#121212',
       symbolColor: '#ffffff',
@@ -27,6 +27,9 @@ function createWindow() {
   })
 
   nativeTheme.themeSource = 'dark'
+
+  // Auto Hide traffic lights
+  // mainWindow.setWindowButtonVisibility(false)
 
   // Load the app
   const preloadPath = path.join(__dirname, '../preload/index.cjs')

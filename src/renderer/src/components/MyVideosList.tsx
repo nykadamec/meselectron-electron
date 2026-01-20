@@ -112,7 +112,7 @@ export function MyVideosList() {
   }, [myVideosPage, isLoadingMyVideos])
 
   return (
-    <div className="flex flex-col gap-4">
+    <div data-elname="my-videos-list" className="flex flex-col gap-4">
       {/* Delete Confirmation Modal */}
       <DeleteConfirmationModal
         video={videoToDelete}
@@ -123,12 +123,13 @@ export function MyVideosList() {
       />
 
       {/* Header */}
-      <div ref={topRef} className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <h2 className="text-lg font-semibold flex items-center gap-2">
+      <div data-elname="list-header" ref={topRef} className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <h2 data-elname="list-title" className="text-lg font-semibold flex items-center gap-2">
           <PlayCircle className="w-5 h-5 text-accent" />
           {t('nav.myVideos')}
         </h2>
         <button
+          data-elname="refresh-button"
           onClick={handleRefresh}
           disabled={isLoadingMyVideos || !activeAccount}
           className="btn-primary flex items-center gap-2"
@@ -139,9 +140,10 @@ export function MyVideosList() {
       </div>
 
       {/* Search Input */}
-      <div className="relative">
+      <div data-elname="search-container" className="relative">
         <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-3 h-3 text-text-muted" />
         <input
+          data-elname="search-input"
           type="text"
           placeholder={t('search.placeholder')}
           value={myVideosSearchQuery}
@@ -150,6 +152,7 @@ export function MyVideosList() {
         />
         {myVideosSearchQuery && (
           <button
+            data-elname="clear-search-btn"
             onClick={handleSearchClear}
             className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-text-muted hover:text-text-primary transition-colors"
           >
@@ -159,16 +162,16 @@ export function MyVideosList() {
       </div>
 
       {myVideosError && (
-        <div className="p-4 bg-red-500/10 border border-red-500 rounded-lg">
-          <p className="text-red-500 text-sm">{myVideosError}</p>
+        <div data-elname="error-banner" className="p-4 bg-red-500/10 border border-red-500 rounded-lg">
+          <p data-elname="error-text" className="text-red-500 text-sm">{myVideosError}</p>
         </div>
       )}
 
       {filteredVideos.length > 0 ? (
-        <div className="bg-surface/50 border border-slate-700/30 rounded-xl overflow-hidden">
-          <div className="flex flex-col divide-y divide-slate-700/50">
+        <div data-elname="videos-container" className="bg-surface/50 rounded-xl overflow-hidden">
+          <div data-elname="videos-list" className="flex flex-col">
             {filteredVideos.map((video) => (
-              <div key={video.id} className="p-1.5">
+              <div data-elname="video-item-wrapper" key={video.id} className="p-1.5">
                 <VideoCard video={video} onDeleteClick={handleDeleteClick} />
               </div>
             ))}
@@ -176,8 +179,8 @@ export function MyVideosList() {
         </div>
       ) : myVideos.length === 0 && !isLoadingMyVideos && process.env.NODE_ENV === 'development' ? (
         // Demo mode for testing new design
-        <div className="bg-surface/50 border border-slate-700/30 rounded-xl overflow-hidden">
-          <div className="flex flex-col  divide-slate-700/50">
+        <div className="bg-surface/50 rounded-xl overflow-hidden">
+          <div className="flex flex-col">
             <div className="p-1.5">
               <VideoCard
                 video={{
@@ -229,12 +232,12 @@ export function MyVideosList() {
           </div>
         </div>
       ) : !isLoadingMyVideos && (
-        <div className="text-center py-12 bg-surface border border-dashed border-border rounded-xl">
-          <PlayCircle className="w-12 h-12 text-text-muted mx-auto mb-4" />
-          <p className="text-text-secondary">
+        <div data-elname="empty-state" className="text-center py-12 bg-surface border border-dashed border-border rounded-xl">
+          <PlayCircle data-elname="empty-icon" className="w-12 h-12 text-text-muted mx-auto mb-4" />
+          <p data-elname="empty-title" className="text-text-secondary">
             {myVideosSearchQuery ? t('search.noResults') : t('empty.myVideos')}
           </p>
-          <p className="text-xs text-text-muted mt-2">
+          <p data-elname="empty-help" className="text-xs text-text-muted mt-2">
             {myVideosSearchQuery
               ? t('empty.myVideosHelp')
               : t('empty.myVideosHelp')}
@@ -243,15 +246,16 @@ export function MyVideosList() {
       )}
 
       {isLoadingMyVideos && (
-        <div className="flex justify-center py-8">
+        <div data-elname="loading-spinner" className="flex justify-center py-8">
           <div className="spinner" />
         </div>
       )}
 
       {/* Pagination */}
       {(myVideos.length > 0 || myVideosPage > 1) && !isLoadingMyVideos && (
-        <div className="flex justify-center items-center gap-4 mt-4 bg-surface p-3 rounded-lg border border-border shadow-sm">
+        <div data-elname="pagination" style={{backgroundColor: '#121212'}} className="flex justify-center items-center gap-4 mt-4 bg-surface p-3 rounded-lg shadow-sm">
           <button
+            data-elname="prev-page-btn"
             onClick={() => handlePageChange(myVideosPage - 1)}
             disabled={myVideosPage <= 1}
             className="btn-secondary p-2 disabled:opacity-30 flex items-center justify-center min-w-[40px]"
@@ -261,8 +265,9 @@ export function MyVideosList() {
           </button>
 
           <div className="flex items-center gap-2">
-            <span className="text-sm font-medium text-text-muted">{t('pagination.page')}</span>
+            <span data-elname="page-label" className="text-sm font-medium text-text-muted">{t('pagination.page')}</span>
             <select
+              data-elname="page-selector"
               value={myVideosPage}
               onChange={handleJumpToPage}
               className="bg-bg-hover border border-border rounded px-2 py-1 text-sm font-bold focus:outline-none focus:ring-1 focus:ring-accent cursor-pointer"
@@ -272,10 +277,11 @@ export function MyVideosList() {
                 <option key={p} value={p}>{p}</option>
               ))}
             </select>
-            <span className="text-sm text-text-muted">{t('pagination.of')}</span>
+            <span data-elname="page-info" className="text-sm text-text-muted">{t('pagination.of')}</span>
           </div>
 
           <button
+            data-elname="next-page-btn"
             onClick={() => handlePageChange(myVideosPage + 1)}
             disabled={!myVideosHasMore}
             className="btn-secondary p-2 disabled:opacity-30 flex items-center justify-center min-w-[40px]"

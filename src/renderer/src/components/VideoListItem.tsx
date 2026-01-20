@@ -18,6 +18,7 @@ function formatSize(bytes?: number): string {
 export function VideoListItem({ video, processed, selected, onClick }: VideoListItemProps) {
   return (
     <div
+      data-elname="video-item"
       className={`flex items-center gap-3 py-2 px-3 rounded-lg transition-colors ${
         processed
           ? 'opacity-50 bg-bg-hover'
@@ -28,21 +29,21 @@ export function VideoListItem({ video, processed, selected, onClick }: VideoList
       onClick={processed ? undefined : onClick}
     >
       {/* Size badge */}
-      <span className="text-xs text-text-muted whitespace-nowrap min-w-[60px]">
+      <span data-elname="size-badge" className="text-xs text-text-muted whitespace-nowrap min-w-[60px]">
         {formatSize(video.size)}
       </span>
 
       {/* Title */}
-      <span className="flex-1 truncate font-medium text-sm">
+      <span data-elname="video-title" className="flex-1 truncate font-medium text-sm">
         {video.title}
       </span>
 
       {/* Status indicator */}
       <div className="flex-shrink-0">
         {processed ? (
-          <span className="text-xs text-success">Hotovo</span>
+          <span data-elname="status-text" className="text-xs text-success">Hotovo</span>
         ) : (
-          <svg className="w-5 h-5 text-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg data-elname="chevron-icon" className="w-5 h-5 text-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
           </svg>
         )}

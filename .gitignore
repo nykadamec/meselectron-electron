@@ -5,6 +5,7 @@ output/
 DATA/
 VIDEOS/
 .serena/
+.claude/
 tests/
 *.log
 npm-debug.log*

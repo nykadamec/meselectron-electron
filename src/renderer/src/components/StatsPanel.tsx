@@ -22,27 +22,27 @@ export function StatsPanel({ stats, accounts = [] }: StatsPanelProps) {
   const earnings = calculateEarnings()
 
   return (
-    <div className="space-y-3">
-      <div className="flex justify-between items-center">
-        <span className="text-sm text-text-secondary">{localeStore.t('stats.totalUploaded')}</span>
-        <span className="text-sm font-medium">{stats.totalUploaded}</span>
+    <div data-elname="stats-panel" className="space-y-3">
+      <div data-elname="stat-row" className="flex justify-between items-center">
+        <span data-elname="stat-label" className="text-sm text-text-secondary">{localeStore.t('stats.totalUploaded')}</span>
+        <span data-elname="stat-value" className="text-sm font-medium">{stats.totalUploaded}</span>
       </div>
-      <div className="flex justify-between items-center">
-        <span className="text-sm text-text-secondary">{localeStore.t('stats.totalDownloaded')}</span>
-        <span className="text-sm font-medium">{stats.totalDownloaded}</span>
+      <div data-elname="stat-row" className="flex justify-between items-center">
+        <span data-elname="stat-label" className="text-sm text-text-secondary">{localeStore.t('stats.totalDownloaded')}</span>
+        <span data-elname="stat-value" className="text-sm font-medium">{stats.totalDownloaded}</span>
       </div>
-      <div className="flex justify-between items-center">
-        <span className="text-sm text-text-secondary">{localeStore.t('stats.activeAccounts')}</span>
-        <span className="text-sm font-medium text-accent">{stats.activeAccounts}</span>
+      <div data-elname="stat-row" className="flex justify-between items-center">
+        <span data-elname="stat-label" className="text-sm text-text-secondary">{localeStore.t('stats.activeAccounts')}</span>
+        <span data-elname="stat-value" className="text-sm font-medium text-accent">{stats.activeAccounts}</span>
       </div>
-      <div className="flex justify-between items-center">
-        <span className="text-sm text-text-secondary">{localeStore.t('stats.queueLength')}</span>
-        <span className="text-sm font-medium">{stats.queueLength}</span>
+      <div data-elname="stat-row" className="flex justify-between items-center">
+        <span data-elname="stat-label" className="text-sm text-text-secondary">{localeStore.t('stats.queueLength')}</span>
+        <span data-elname="stat-value" className="text-sm font-medium">{stats.queueLength}</span>
       </div>
-      <div className="pt-2 border-t border-border">
+      <div data-elname="earnings-row" className="pt-2 border-t border-border">
         <div className="flex justify-between items-center">
-          <span className="text-sm text-text-secondary">{localeStore.t('stats.earnings')}</span>
-          <span className="text-sm font-bold text-success">{earnings.toFixed(0)} Kč</span>
+          <span data-elname="earnings-label" className="text-sm text-text-secondary">{localeStore.t('stats.earnings')}</span>
+          <span data-elname="earnings-value" className="text-sm font-bold text-success">{earnings.toFixed(0)} Kč</span>
         </div>
       </div>
     </div>

@@ -39,21 +39,21 @@ export function AccountCard({ account }: AccountCardProps) {
   // const czkValue = credits ? (credits / 1000) * 300 : 0
 
   return (
-    <div className="flex items-center gap-2 p-2 bg-bg-main rounded-lg border border-border">
-      <div className={`w-2 h-2 rounded-full ${account.isActive ? 'bg-success' : 'bg-text-muted'}`} />
+    <div data-elname="account-card" className="flex items-center gap-2 p-2 bg-bg-main rounded-lg border border-border">
+      <div data-elname="account-status" className={`w-2 h-2 rounded-full ${account.isActive ? 'bg-success' : 'bg-text-muted'}`} />
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium truncate">{displayName}</p>
+        <p data-elname="account-name" className="text-sm font-medium truncate">{displayName}</p>
         <div className="flex items-center gap-2">
-          <p className="text-xs text-text-muted">
+          <p data-elname="account-status-text" className="text-xs text-text-muted">
             {account.isActive ? localeStore.t('accounts.active') : localeStore.t('accounts.inactive')}
           </p>
           {credits !== null && (
-            <span className="text-xs text-accent">
+            <span data-elname="account-credits" className="text-xs text-accent">
               {localeStore.t('stats.points', { count: credits.toLocaleString() })}
             </span>
           )}
           {loadingCredits && (
-            <span className="text-xs text-text-muted animate-pulse">...</span>
+            <span data-elname="loading-indicator" className="text-xs text-text-muted animate-pulse">...</span>
           )}
         </div>
       </div>

@@ -31,25 +31,26 @@ export function SettingsPanel() {
   const defaultOutputDir = settings.outputDir || '~/Videos/meselectron'
 
   return (
-    <div className="flex flex-col h-full">
+    <div data-elname="settings-panel" className="flex flex-col h-full">
       {/* Header - fixed at top */}
-      <div className="flex-shrink-0 p-4 pb-2">
-        <h2 className="text-lg font-medium mb-1">{localeStore.t('settings.title')}</h2>
-        <p className="text-sm text-text-muted">{localeStore.t('settings.subtitle')}</p>
+      <div data-elname="settings-header" className="flex-shrink-0 p-4 pb-2">
+        <h2 data-elname="settings-title" className="text-lg font-medium mb-1">{localeStore.t('settings.title')}</h2>
+        <p data-elname="settings-subtitle" className="text-sm text-text-muted">{localeStore.t('settings.subtitle')}</p>
       </div>
 
       {/* Scrollable content - centered */}
-      <div className="flex-1 overflow-y-auto custom-scrollbar">
+      <div data-elname="settings-content" className="flex-1 overflow-y-auto custom-scrollbar">
         <div className="flex justify-center min-h-full">
           <div className="w-full max-w-2xl px-4 pb-4 space-y-6 pt-2">
             {/* General Settings */}
-            <div className="card space-y-4">
-              <h3 className="font-medium text-text-secondary uppercase text-xs tracking-wider">{localeStore.t('settings.general')}</h3>
+            <div data-elname="settings-card" className="card space-y-4">
+              <h3 data-elname="card-title" className="font-medium text-text-secondary uppercase text-xs tracking-wider">{localeStore.t('settings.general')}</h3>
 
               {/* Language selector */}
               <div>
-                <label className="block font-medium mb-2">{localeStore.t('settings.language')}</label>
+                <label data-elname="language-label" className="block font-medium mb-2">{localeStore.t('settings.language')}</label>
                 <select
+                  data-elname="language-select"
                   value={localeStore.locale}
                   onChange={(e) => handleLocaleChange(e.target.value as Locale)}
                   className="w-full input-dark"
@@ -62,10 +63,10 @@ export function SettingsPanel() {
 
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="font-medium">{localeStore.t('settings.autoRestart')}</p>
+                  <p data-elname="auto-restart-label" className="font-medium">{localeStore.t('settings.autoRestart')}</p>
                   <p className="text-sm text-text-muted">{localeStore.t('settings.autoRestartDesc')}</p>
                 </div>
-                <label className="relative inline-flex items-center cursor-pointer">
+                <label data-elname="auto-restart-toggle" className="relative inline-flex items-center cursor-pointer">
                   <input
                     type="checkbox"
                     checked={settings.autoReset}
@@ -78,14 +79,15 @@ export function SettingsPanel() {
             </div>
 
             {/* Concurrency Settings */}
-            <div className="card space-y-4">
-              <h3 className="font-medium text-text-secondary uppercase text-xs tracking-wider">{localeStore.t('settings.parallelism')}</h3>
+            <div data-elname="settings-card" className="card space-y-4">
+              <h3 data-elname="card-title" className="font-medium text-text-secondary uppercase text-xs tracking-wider">{localeStore.t('settings.parallelism')}</h3>
 
               <div>
-                <label className="block font-medium mb-2">
+                <label data-elname="download-concurrency-label" className="block font-medium mb-2">
                   {localeStore.t('settings.downloadConcurrency', { count: String(settings.downloadConcurrency) })}
                 </label>
                 <input
+                  data-elname="download-concurrency"
                   type="range"
                   min="1"
                   max="10"
@@ -100,10 +102,11 @@ export function SettingsPanel() {
               </div>
 
               <div>
-                <label className="block font-medium mb-2">
+                <label data-elname="upload-concurrency-label" className="block font-medium mb-2">
                   {localeStore.t('settings.uploadConcurrency', { count: String(settings.uploadConcurrency) })}
                 </label>
                 <input
+                  data-elname="upload-concurrency"
                   type="range"
                   min="1"
                   max="10"
@@ -118,10 +121,11 @@ export function SettingsPanel() {
               </div>
 
               <div>
-                <label className="block font-medium mb-2">
+                <label data-elname="video-count-label" className="block font-medium mb-2">
                   {localeStore.t('settings.videoCount', { count: String(settings.videoCount) })}
                 </label>
                 <input
+                  data-elname="video-count"
                   type="range"
                   min="1"
                   max="50"
@@ -137,16 +141,16 @@ export function SettingsPanel() {
             </div>
 
             {/* Download Settings */}
-            <div className="card space-y-4">
-              <h3 className="font-medium text-text-secondary uppercase text-xs tracking-wider">{localeStore.t('settings.download')}</h3>
+            <div data-elname="settings-card" className="card space-y-4">
+              <h3 data-elname="card-title" className="font-medium text-text-secondary uppercase text-xs tracking-wider">{localeStore.t('settings.download')}</h3>
 
               {/* Watermark toggle */}
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="font-medium">{localeStore.t('settings.addWatermark')}</p>
+                  <p data-elname="watermark-label" className="font-medium">{localeStore.t('settings.addWatermark')}</p>
                   <p className="text-sm text-text-muted">{localeStore.t('settings.addWatermarkDesc')}</p>
                 </div>
-                <label className="relative inline-flex items-center cursor-pointer">
+                <label data-elname="watermark-toggle" className="relative inline-flex items-center cursor-pointer">
                   <input
                     type="checkbox"
                     checked={settings.addWatermark}
@@ -160,10 +164,10 @@ export function SettingsPanel() {
               {/* HQ Processing toggle */}
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="font-medium">{localeStore.t('settings.hqProcessing')}</p>
+                  <p data-elname="hq-processing-label" className="font-medium">{localeStore.t('settings.hqProcessing')}</p>
                   <p className="text-sm text-text-muted">{localeStore.t('settings.hqProcessingDesc')}</p>
                 </div>
-                <label className="relative inline-flex items-center cursor-pointer">
+                <label data-elname="hq-processing-toggle" className="relative inline-flex items-center cursor-pointer">
                   <input
                     type="checkbox"
                     checked={settings.hqProcessing}
@@ -176,8 +180,9 @@ export function SettingsPanel() {
 
               {/* Download mode */}
               <div>
-                <label className="block font-medium mb-2">{localeStore.t('settings.downloadMode')}</label>
+                <label data-elname="download-mode-label" className="block font-medium mb-2">{localeStore.t('settings.downloadMode')}</label>
                 <select
+                  data-elname="download-mode-select"
                   value={settings.downloadMode}
                   onChange={(e) => setSettings({ ...settings, downloadMode: e.target.value as 'ffmpeg-chunks' | 'curl' | 'wget' })}
                   className="w-full input-dark"
@@ -191,16 +196,17 @@ export function SettingsPanel() {
 
               {/* Output directory */}
               <div>
-                <label className="block font-medium mb-2">{localeStore.t('settings.outputDir')}</label>
+                <label data-elname="output-dir-label" className="block font-medium mb-2">{localeStore.t('settings.outputDir')}</label>
                 <div className="flex gap-2">
                   <input
+                    data-elname="output-dir-input"
                     type="text"
                     value={settings.outputDir || defaultOutputDir}
                     onChange={(e) => setSettings({ ...settings, outputDir: e.target.value })}
                     className="flex-1 input-dark text-sm font-mono"
                     placeholder={defaultOutputDir}
                   />
-                  <button onClick={handleSelectOutputDir} className="btn-secondary text-sm whitespace-nowrap">
+                  <button data-elname="browse-button" onClick={handleSelectOutputDir} className="btn-secondary text-sm whitespace-nowrap">
                     {localeStore.t('settings.browse')}
                   </button>
                 </div>
@@ -209,15 +215,15 @@ export function SettingsPanel() {
             </div>
 
             {/* Speed Settings */}
-            <div className="card space-y-4">
-              <h3 className="font-medium text-text-secondary uppercase text-xs tracking-wider">{localeStore.t('settings.speed')}</h3>
+            <div data-elname="settings-card" className="card space-y-4">
+              <h3 data-elname="card-title" className="font-medium text-text-secondary uppercase text-xs tracking-wider">{localeStore.t('settings.speed')}</h3>
 
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="font-medium">{localeStore.t('settings.noSpeedLimit')}</p>
+                  <p data-elname="no-speed-limit-label" className="font-medium">{localeStore.t('settings.noSpeedLimit')}</p>
                   <p className="text-sm text-text-muted">{localeStore.t('settings.noSpeedLimitDesc')}</p>
                 </div>
-                <label className="relative inline-flex items-center cursor-pointer">
+                <label data-elname="no-speed-limit-toggle" className="relative inline-flex items-center cursor-pointer">
                   <input
                     type="checkbox"
                     checked={settings.nospeed}
@@ -230,15 +236,15 @@ export function SettingsPanel() {
             </div>
 
             {/* Updater Settings */}
-            <div className="card space-y-4">
-              <h3 className="font-medium text-text-secondary uppercase text-xs tracking-wider">{localeStore.t('settings.updates')}</h3>
+            <div data-elname="settings-card" className="card space-y-4">
+              <h3 data-elname="card-title" className="font-medium text-text-secondary uppercase text-xs tracking-wider">{localeStore.t('settings.updates')}</h3>
 
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="font-medium">{localeStore.t('settings.autoCheck')}</p>
+                  <p data-elname="auto-check-label" className="font-medium">{localeStore.t('settings.autoCheck')}</p>
                   <p className="text-sm text-text-muted">{localeStore.t('settings.autoCheckDesc')}</p>
                 </div>
-                <label className="relative inline-flex items-center cursor-pointer">
+                <label data-elname="auto-check-toggle" className="relative inline-flex items-center cursor-pointer">
                   <input
                     type="checkbox"
                     checked={updaterStore.autoCheck}
@@ -251,10 +257,10 @@ export function SettingsPanel() {
 
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="font-medium">{localeStore.t('settings.autoDownload')}</p>
+                  <p data-elname="auto-download-label" className="font-medium">{localeStore.t('settings.autoDownload')}</p>
                   <p className="text-sm text-text-muted">{localeStore.t('settings.autoDownloadDesc')}</p>
                 </div>
-                <label className="relative inline-flex items-center cursor-pointer">
+                <label data-elname="auto-download-toggle" className="relative inline-flex items-center cursor-pointer">
                   <input
                     type="checkbox"
                     checked={updaterStore.autoDownload}
@@ -266,18 +272,19 @@ export function SettingsPanel() {
               </div>
 
               {/* Version info */}
-              <div className="pt-2 border-t border-border">
+              <div data-elname="version-info" className="pt-2 border-t border-border">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="font-medium">{localeStore.t('settings.version')}</p>
-                    <p className="text-sm text-text-muted">
+                    <p data-elname="version-label" className="font-medium">{localeStore.t('settings.version')}</p>
+                    <p data-elname="current-version" className="text-sm text-text-muted">
                       Current: {updaterStore.currentVersion}
                       {updaterStore.latestVersion && updaterStore.latestVersion !== updaterStore.currentVersion && (
-                        <span className="text-accent ml-2">→ {updaterStore.latestVersion}</span>
+                        <span data-elname="latest-version" className="text-accent ml-2">→ {updaterStore.latestVersion}</span>
                       )}
                     </p>
                   </div>
                   <button
+                    data-elname="check-updates-button"
                     onClick={() => checkForUpdates()}
                     className="btn-secondary text-sm flex items-center gap-2"
                   >
@@ -289,11 +296,12 @@ export function SettingsPanel() {
             </div>
 
             {/* Actions */}
-            <div className="flex justify-center gap-3 pt-4 border-t border-border">
-              <button onClick={handleSave} className="btn-primary">
+            <div data-elname="settings-actions" className="flex justify-center gap-3 pt-4 border-t border-border">
+              <button data-elname="save-button" onClick={handleSave} className="btn-primary">
                 {saved ? localeStore.t('settings.saved') : localeStore.t('settings.save')}
               </button>
               <button
+                data-elname="reset-defaults-button"
                 onClick={() => setSettings({
                   autoReset: true,
                   downloadConcurrency: 2,

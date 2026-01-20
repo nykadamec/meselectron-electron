@@ -16,7 +16,7 @@ export function Footer() {
   }, [])
 
   return (
-    <footer style={{
+    <footer data-elname="app-footer" style={{
       position: 'fixed',
       bottom: 0,
       left: 0,
@@ -30,8 +30,8 @@ export function Footer() {
       justifyContent: 'space-between',
       zIndex: 50
     }}>
-      <span>{appName}</span>
-      <span style={{ fontSize: '90%' }}>v{version} | LANG: {localeStore.locale.toUpperCase()} | BUILD: {appBuild}</span>
+      <span data-elname="footer-app-name">{appName}</span>
+      <span data-elname="footer-version" style={{ fontSize: '90%' }}>v{version} | LANG: {localeStore.locale.toUpperCase()} | BUILD: {appBuild}</span>
     </footer>
   )
 }

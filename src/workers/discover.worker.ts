@@ -23,6 +23,7 @@ interface DiscoverOptions {
   count: number
   cookies?: string  // Backwards compatibility
   videoId?: string
+  processedUrls?: string[]
 }
 
 /**
@@ -225,10 +226,14 @@ async function discoverVideos(options: DiscoverOptions) {
     ? parseCookieFile(cookies)
     : cookies
 
-  const { count } = { count: options.count }
-  const videoCandidates: VideoCandidate[] = []
+  const { count, processedUrls = [] } = options
+  const processedSet = new Set(processedUrls)
+
+  const availableCandidates: VideoCandidate[] = []
   const seenUrls = new Set<string>()
-  const BUFFER_MULTIPLIER = 3 // Get 3x more candidates to account for size filtering
+
+  // Higher buffer for skipping processed videos
+  const BUFFER_MULTIPLIER = 6
   const targetCount = count * BUFFER_MULTIPLIER
 
   // Report progress
@@ -252,8 +257,13 @@ async function discoverVideos(options: DiscoverOptions) {
 
   for (const config of pageConfigs) {
     for (let page = 1; page <= 10; page++) {
-      // Check if we have enough candidates
-      if (videoCandidates.length >= targetCount) {
+      // Check if we have enough available candidates
+      if (availableCandidates.length >= count) {
+        break
+      }
+
+      // Also stop if we've scanned enough for the buffer
+      if (availableCandidates.length >= targetCount) {
         break
       }
 
@@ -268,7 +278,7 @@ async function discoverVideos(options: DiscoverOptions) {
         message: `Prohledávám stránku ${page}/10 (${config.name})...`,
         scanned: totalScanned,
         total: totalPages,
-        found: videoCandidates.length,
+        found: availableCandidates.length,
         videoId: options.videoId
       })
 
@@ -281,18 +291,21 @@ async function discoverVideos(options: DiscoverOptions) {
       // Extract links from this page
       const pageLinks = await extractVideoLinksFromPage(url, validCookies)
 
-      // Filter out duplicates and add to results
+      // Filter out duplicates and processed videos, add only available to results
       for (const link of pageLinks) {
         if (!seenUrls.has(link.url)) {
           seenUrls.add(link.url)
-          videoCandidates.push(link)
+          // Skip already processed videos
+          if (!processedSet.has(link.url)) {
+            availableCandidates.push(link)
+          }
         }
       }
 
-      console.log(`[Discover] Page ${page} (${config.name}): ${pageLinks.length} links, total: ${videoCandidates.length}`)
+      console.log(`[Discover] Page ${page} (${config.name}): ${pageLinks.length} links, available: ${availableCandidates.length}`)
     }
 
-    if (videoCandidates.length >= targetCount) {
+    if (availableCandidates.length >= count) {
       break
     }
   }
@@ -300,19 +313,20 @@ async function discoverVideos(options: DiscoverOptions) {
   sendProgress({
     type: 'status',
     status: 'complete',
-    message: `Nalezeno ${videoCandidates.length} video kandidátů`,
+    message: `Nalezeno ${availableCandidates.length} dostupných videí`,
     videoId: options.videoId
   })
 
-  // Send final result
+  // Send final result - only available candidates
+  const finalCandidates = availableCandidates.slice(0, count)
   sendProgress({
     type: 'complete',
     success: true,
-    candidates: videoCandidates,
+    candidates: finalCandidates,
     videoId: options.videoId
   })
 
-  return videoCandidates
+  return finalCandidates
 }
 
 // Handle discovery request

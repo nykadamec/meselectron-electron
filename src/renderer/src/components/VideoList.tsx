@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import { useVideoStore, useProcessedStore, useAppStore, useQueueStore, useAccountStore, useSettingsStore } from '../store'
 import { VideoListItem } from './VideoListItem'
 import type { VideoCandidate } from '../types'
@@ -35,12 +35,8 @@ export function VideoList() {
 
   const { isProcessing } = useAppStore.getState()
 
-  // Separate processed vs available videos
-  const processedVideos = videoCandidates.filter((c: VideoCandidate) => processedUrls.has(c.url))
-  const availableVideos = videoCandidates.filter((c: VideoCandidate) => !processedUrls.has(c.url))
-
-  // Collapsible state for processed section
-  const [isProcessedCollapsed, setIsProcessedCollapsed] = useState(false)
+  // All candidates are available - processed videos are filtered in worker
+  const availableVideos = videoCandidates
 
   // Auto-trigger discover when tab is opened and no candidates
   useEffect(() => {
@@ -66,7 +62,8 @@ export function VideoList() {
     try {
       await window.electronAPI.discoverStart({
         cookies,
-        count: settings.videoCount
+        count: settings.videoCount,
+        processedUrls: Array.from(processedUrls)
       })
     } catch (error) {
       console.error('Discover failed:', error)
@@ -235,38 +232,10 @@ export function VideoList() {
           </div>
         )}
 
-        {/* Processed videos section */}
-        {processedVideos.length > 0 && (
-          <>
-            <h3
-              data-elname="processed-section-title"
-              className="flex items-center gap-2 text-sm text-text-muted uppercase tracking-wider mt-4 mb-2 cursor-pointer hover:text-text-primary sticky top-0 bg-bg-main py-1"
-              onClick={() => setIsProcessedCollapsed(!isProcessedCollapsed)}
-            >
-              <svg
-                className={`w-4 h-4 transition-transform ${isProcessedCollapsed ? '-rotate-90' : ''}`}
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-              </svg>
-              Již zpracovaná ({processedVideos.length})
-            </h3>
-            {!isProcessedCollapsed && processedVideos.map((video: VideoCandidate) => (
-              <VideoListItem
-                key={video.url}
-                video={video}
-                processed={true}
-              />
-            ))}
-          </>
-        )}
-
         {/* Available videos section */}
         {availableVideos.length > 0 && (
           <>
-            <h3 data-elname="section-title" className={`text-sm text-text-muted uppercase tracking-wider mt-4 mb-2 sticky top-0 bg-bg-main py-1 ${processedVideos.length > 0 ? '' : ''}`}>
+            <h3 data-elname="section-title" className="text-sm text-text-muted uppercase tracking-wider mt-4 mb-2 sticky top-0 bg-bg-main py-1">
               K dispozici ({availableVideos.length})
             </h3>
             {availableVideos.map((video: VideoCandidate) => (
@@ -281,7 +250,7 @@ export function VideoList() {
         )}
 
         {/* Empty available section */}
-        {!isDiscovering && processedVideos.length > 0 && availableVideos.length === 0 && (
+        {!isDiscovering && availableVideos.length === 0 && (
           <div data-elname="no-available-videos" className="text-center py-8">
             <p className="text-text-muted">Žádná nová videa</p>
           </div>

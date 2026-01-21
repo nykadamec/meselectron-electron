@@ -11,14 +11,8 @@
  * useMyVideosStore - My videos list
  */
 
-// Import types first
-export * from './types'
-
 // Main app store (coordinates UI state, discovery, accounts, settings)
 export { useAppStore } from './useAppStore'
-
-// Legacy alias - useUIStore points to useAppStore
-export { useAppStore as useUIStore } from './useAppStore'
 
 // Queue store - manages download/upload queue
 export { useQueueStore, createQueueItem, createVideo } from './useQueueStore'
@@ -40,7 +34,6 @@ export { useProcessedStore } from './useProcessedStore'
 
 // Processed video persistence helpers
 let saveTimeout: ReturnType<typeof setTimeout> | null = null
-let autosaveUnsubscribe: (() => void) | null = null
 
 async function saveProcessedToDisk() {
   if (saveTimeout) {
@@ -83,9 +76,3 @@ export async function loadProcessedFromDisk() {
 
 // Export saveProcessedToDisk for calling after addProcessedUrl
 export { saveProcessedToDisk }
-
-export async function setOnQueueChange(callback: () => void) {
-  console.warn('[Store] setOnQueueChange is deprecated. Use useQueueStore.setProcessQueueCallback instead.')
-  const { useQueueStore } = await import('./useQueueStore')
-  useQueueStore.getState().setProcessQueueCallback(callback)
-}

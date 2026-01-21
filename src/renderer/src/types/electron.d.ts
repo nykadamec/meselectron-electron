@@ -81,6 +81,7 @@ interface ElectronAPI {
   discoverStart: (options: {
     cookies: string
     count: number
+    processedUrls?: string[]
   }) => Promise<{ success: boolean }>
 
   // My Videos

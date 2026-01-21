@@ -1,7 +1,6 @@
 // Version Handlers - version:*, build:get, name:get, platform:info
 import { ipcMain } from 'electron'
 import path from 'path'
-import * as fs from 'fs/promises'
 import { getUserDataPath, getProjectRoot } from '../utils/paths'
 import { getAppVersion, getBuildNumber, getAppName } from '../utils/version'
 

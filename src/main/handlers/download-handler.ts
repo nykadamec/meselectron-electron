@@ -98,7 +98,9 @@ async function extractVideoMetadata(url: string, cookies: string, hqProcessing?:
   const contentUrlMatch = html.match(/<meta\s+itemprop="contentUrl"\s+content="([^"]+)"/)
   console.log('[Download-Handler] contentUrlMatch:', contentUrlMatch)
   if (contentUrlMatch) {
-    mp4Url = decodeURIComponent(contentUrlMatch[1])
+    // Decode HTML entities first (&amp; -> &), then URL decode
+    const decodedHtml = contentUrlMatch[1].replace(/&amp;/g, '&')
+    mp4Url = decodeURIComponent(decodedHtml)
     console.log('[Download-Handler] found mp4Url (HQ meta):', mp4Url)
   }
 

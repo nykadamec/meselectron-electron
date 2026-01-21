@@ -1,9 +1,9 @@
-import { useUIStore } from '../store'
+import { useAppStore } from '../store'
 import { useLocaleStore } from '../i18n'
 import { RefreshCw, Settings, Minus, UploadCloud } from 'lucide-react'
 
 export function Header() {
-  const uiStore = useUIStore()
+  const uiStore = useAppStore()
   const { isProcessing, addLog } = uiStore
   const t = useLocaleStore(state => state.t)
 

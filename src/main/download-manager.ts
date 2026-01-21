@@ -142,43 +142,6 @@ export async function downloadFiles(
 }
 
 /**
- * Get human-readable file size
- */
-export function formatFileSize(bytes: number): string {
-  if (bytes === 0) return '0 B'
-
-  const units = ['B', 'KB', 'MB', 'GB']
-  const k = 1024
-  const i = Math.floor(Math.log(bytes) / Math.log(k))
-
-  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${units[i]}`
-}
-
-/**
- * Get human-readable speed
- */
-export function formatSpeed(bytesPerSecond: number): string {
-  return `${formatFileSize(bytesPerSecond)}/s`
-}
-
-/**
- * Get human-readable ETA
- */
-export function formatEta(seconds: number): string {
-  if (seconds < 0 || seconds === Infinity) return 'Unknown'
-
-  if (seconds < 60) {
-    return `${Math.round(seconds)}s`
-  }
-
-  if (seconds < 3600) {
-    return `${Math.floor(seconds / 60)}m ${Math.round(seconds % 60)}s`
-  }
-
-  return `${Math.floor(seconds / 3600)}h ${Math.round((seconds % 3600) / 60)}m`
-}
-
-/**
  * Check if file exists and is valid size
  */
 export async function isDownloadValid(
@@ -195,20 +158,4 @@ export async function isDownloadValid(
   }
 
   return true
-}
-
-/**
- * Remove downloaded files (cleanup)
- */
-export async function cleanupDownloads(filePaths: string[]): Promise<void> {
-  for (const filePath of filePaths) {
-    try {
-      if (existsSync(filePath)) {
-        await fsPromises.unlink(filePath)
-        console.log(`[UPDATER] Cleaned up: ${filePath}`)
-      }
-    } catch (error) {
-      console.error(`[UPDATER] Failed to cleanup ${filePath}: ${error}`)
-    }
-  }
 }

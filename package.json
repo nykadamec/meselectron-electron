@@ -4,7 +4,7 @@
   "description": "Prehrajto.cz AutoPilot - Desktop application for video management",
   "main": "dist/main/index.js",
   "appName": "Prehrajto.cz AutoPilot",
-  "buildNumber": "2621_0030",
+  "buildNumber": "2621_0817",
   "overrides": {
     "tar": "^6.2.1 || ^7.5.3"
   },

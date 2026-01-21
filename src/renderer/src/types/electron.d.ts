@@ -68,6 +68,7 @@ interface ElectronAPI {
   // Processed videos persistence
   processedRead: () => Promise<Array<{ url: string; status: string; timestamp: string }>>
   processedWrite: (items: Array<{ url: string; status: string; timestamp: string }>) => Promise<boolean>
+  onProcessedUpdated: (callback: () => void) => void
 
   // Upload
   uploadStart: (options: {

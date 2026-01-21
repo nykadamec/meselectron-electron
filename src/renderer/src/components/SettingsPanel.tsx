@@ -1,11 +1,11 @@
 import { useState } from 'react'
-import { useAppStore } from '../store'
+import { useSettingsStore } from '../store'
 import { useUpdaterStore, checkForUpdates } from '../store/updater'
 import { useLocaleStore, type Locale } from '../i18n'
 import { RefreshCw } from 'lucide-react'
 
 export function SettingsPanel() {
-  const { settings, setSettings } = useAppStore()
+  const { settings, setSettings } = useSettingsStore()
   const updaterStore = useUpdaterStore()
   const localeStore = useLocaleStore()
   const [saved, setSaved] = useState(false)

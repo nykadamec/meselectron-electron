@@ -91,4 +91,4 @@ app.on('before-quit', () => {
 })
 
 // IPC Handlers
-import './ipc-handlers.js'
+import './handlers/index.js'

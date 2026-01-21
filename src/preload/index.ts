@@ -133,5 +133,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // i18n API
   readLocaleFile: function(locale: 'en' | 'cz') {
     return ipcRenderer.invoke('locale:read', locale)
+  },
+
+  // Processed videos listener
+  onProcessedUpdated: function(callback: () => void) {
+    ipcRenderer.on('processed:updated', callback)
   }
 })

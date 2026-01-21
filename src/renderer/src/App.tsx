@@ -1,8 +1,17 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import * as ScrollArea from '@radix-ui/react-scroll-area'
 import * as Avatar from '@radix-ui/react-avatar'
 import * as Separator from '@radix-ui/react-separator'
-import { useAppStore, setOnQueueChange, loadProcessedFromDisk } from './store'
+import {
+  useAppStore,
+  useQueueStore,
+  loadProcessedFromDisk,
+  saveProcessedToDisk,
+  useAccountStore,
+  useProcessedStore,
+  useSettingsStore,
+  useVideoStore
+} from './store'
 import { initUpdaterStore } from './store/updater'
 import { initI18n, useLocaleStore } from './i18n'
 import { Header } from './components/Header'
@@ -25,6 +34,14 @@ import {
 
 function App() {
   const localeStore = useLocaleStore()
+
+  // Stores
+  const accountStore = useAccountStore()
+  const processedStore = useProcessedStore()
+  const settingsStore = useSettingsStore()
+  const videoStore = useVideoStore()
+
+  // Main app store
   const {
     activeTab,
     setActiveTab,
@@ -34,8 +51,18 @@ function App() {
     setSettings,
     logs,
     addLog,
-    updateVideo,
+    stats,
+    updateStats,
+    setVideoCandidates,
+    setDiscovering,
+    addProcessedUrl,
+    clearCandidates
+  } = useAppStore()
+
+  // Queue store
+  const {
     queue,
+    updateQueueItem,
     removeFromQueue,
     reorderQueue,
     clearQueue,
@@ -43,25 +70,20 @@ function App() {
     resumeQueue,
     retryFailedItems,
     isQueuePaused,
-    stats,
-    updateStats,
-    setVideoCandidates,
-    setDiscovering
-  } = useAppStore()
+    setProcessQueueCallback,
+    triggerQueueProcess
+  } = useQueueStore()
 
   const [isLoading, setIsLoading] = useState(true)
   const [loginEmail, setLoginEmail] = useState<string | null>(null)
 
-  const accountsReadCookies = async (accountId: string): Promise<string | null> => {
-    if (!window.electronAPI) return null
-    return window.electronAPI.accountsReadCookies(accountId)
-  }
-
   // Debounced processQueue to prevent race conditions
   const processQueueImpl = useCallback(() => {
     if (!window.electronAPI) return
-    const state = useAppStore.getState()
-    const { isQueuePaused, queue, getActiveItem, updateQueueItem, getPendingCount, addLog } = state
+    const state = useQueueStore.getState()
+    const { isQueuePaused, queue, getActiveItem, updateQueueItem, getPendingCount } = state
+    const appState = useAppStore.getState()
+    const { addLog, settings } = appState
 
     // Double-check after debounce - someone else might have started processing
     if (isQueuePaused) return
@@ -87,30 +109,30 @@ function App() {
       url: nextItem.video.url,
       videoTitle: nextItem.video.title,
       cookies: nextItem.cookies || '',
-      hqProcessing: settings.hqProcessing
+      hqProcessing: settings?.hqProcessing ?? true
     }).catch((error) => {
       addLog({ id: crypto.randomUUID(), timestamp: new Date(), level: 'error', message: `Chyba při stahování ${nextItem.video.title}: ${error}`, source: 'download' })
       updateQueueItem(nextItem.id, { status: 'failed', error: String(error), completedAt: new Date() })
       processQueueImpl()
     })
-  }, [settings.hqProcessing, addLog])
+  }, [])
 
   // Debounced wrapper for processQueue
-  let processQueueDebounced: ReturnType<typeof setTimeout> | null = null
+  const processQueueDebouncedRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const processQueue = useCallback(() => {
-    if (processQueueDebounced) {
-      clearTimeout(processQueueDebounced)
+    if (processQueueDebouncedRef.current) {
+      clearTimeout(processQueueDebouncedRef.current)
     }
-    processQueueDebounced = setTimeout(() => {
+    processQueueDebouncedRef.current = setTimeout(() => {
       processQueueImpl()
-      processQueueDebounced = null
+      processQueueDebouncedRef.current = null
     }, 100) // 100ms debounce
   }, [processQueueImpl])
 
   const handleKillItem = useCallback((itemId: string) => {
-    const state = useAppStore.getState()
-    const { updateQueueItem } = state
-    const item = state.queue.find(i => i.id === itemId)
+    const { updateQueueItem } = useQueueStore.getState()
+    const { queue } = useQueueStore.getState()
+    const item = queue.find(i => i.id === itemId)
     if (!item || item.status !== 'active') return
     updateQueueItem(itemId, { status: 'failed', error: 'Uživatel zrušil', completedAt: new Date() })
     if (window.electronAPI) {
@@ -118,16 +140,22 @@ function App() {
       window.electronAPI.uploadStop?.()
     }
     // Immediate processing after kill (cancel is intentional)
-    if (processQueueDebounced) {
-      clearTimeout(processQueueDebounced)
-      processQueueDebounced = null
+    if (processQueueDebouncedRef.current) {
+      clearTimeout(processQueueDebouncedRef.current)
+      processQueueDebouncedRef.current = null
     }
     processQueueImpl()
   }, [processQueueImpl])
 
   const handleDeleteItem = useCallback((itemId: string) => {
-    useAppStore.getState().deleteFromQueue(itemId)
-  }, [])
+    useQueueStore.getState().deleteFromQueue(itemId, addLog)
+  }, [addLog])
+
+  // Register processQueue callback with queue store
+  useEffect(() => {
+    setProcessQueueCallback(() => processQueue())
+    return () => setProcessQueueCallback(null)
+  }, [setProcessQueueCallback, processQueue])
 
   useEffect(() => {
     const initApp = async () => {
@@ -140,17 +168,37 @@ function App() {
         await initI18n()
         const loadedSettings = await window.electronAPI.settingsRead()
         setSettings(loadedSettings)
+        settingsStore.setSettings(loadedSettings)
+
         await loadProcessedFromDisk()
+
+        // Sync processed URLs to smaller store
+        const appState = useAppStore.getState()
+        if (appState.processedVideoUrls) {
+          processedStore.setUrls(appState.processedVideoUrls)
+        }
+
         const loadedAccounts = await window.electronAPI.accountsList()
+        console.log('[DEBUG] Accounts loaded:', loadedAccounts.length, 'accounts, first:', loadedAccounts[0]?.email, 'isActive:', loadedAccounts[0]?.isActive)
         setAccounts(loadedAccounts)
+        accountStore.setAccounts(loadedAccounts)
+
+        // Set active account
+        const activeAcc = loadedAccounts.find((a: { isActive: boolean }) => a.isActive)
+        if (activeAcc) {
+          accountStore.setActiveAccount(activeAcc.id)
+        }
+
         const accountsNeedingLogin = loadedAccounts.filter((a: { needsLogin: boolean }) => a.needsLogin)
         if (accountsNeedingLogin.length > 0) setLoginEmail(accountsNeedingLogin[0].email)
+
         const autoLoginResults = await window.electronAPI.accountsAutoLogin()
         if (autoLoginResults && autoLoginResults.length > 0) {
           const successful = autoLoginResults.filter((r: { success: boolean }) => r.success).length
           addLog({ id: crypto.randomUUID(), timestamp: new Date(), level: successful > 0 ? 'success' : 'error', message: `Auto-login: ${successful}/${autoLoginResults.length} účtů přihlášeno`, source: 'app' })
           const refreshedAccounts = await window.electronAPI.accountsList()
           setAccounts(refreshedAccounts)
+          accountStore.setAccounts(refreshedAccounts)
         }
         setLoginEmail(null)
         const platformInfo = await window.electronAPI.platformInfo()
@@ -167,13 +215,17 @@ function App() {
   }, [])
 
   useEffect(() => {
-    setOnQueueChange(() => processQueue())
-  }, [processQueue])
-
-  useEffect(() => {
     if (!window.electronAPI) return
+
     const handleDownloadProgress = (_event: unknown, data: unknown) => {
       const d = data as { type: string; status?: string; progress?: number; speed?: number; eta?: number; message?: string; error?: string; videoId?: string; size?: number; path?: string }
+
+      // Get fresh state from stores
+      const queueState = useQueueStore.getState()
+      const { queue, updateQueueItem } = queueState
+      const appState = useAppStore.getState()
+      const { addLog, addProcessedUrl, accounts } = appState
+
       if (d.videoId) {
         let newStatus: 'pending' | 'downloading' | 'processing' | 'uploading' | 'completed' | 'failed' | 'already-exists' | 'skipped' = 'downloading'
         if (d.type === 'complete') newStatus = d.error ? (d.status as typeof newStatus) || 'failed' : 'completed'
@@ -182,32 +234,36 @@ function App() {
         else if (d.status === 'already-exists') newStatus = 'already-exists'
         else if (d.status === 'skipped') newStatus = 'skipped'
         else if (d.status === 'completed') newStatus = 'completed'
-        const videoUpdate: Record<string, unknown> = { status: newStatus, progress: d.progress || 0, speed: d.speed, eta: d.eta, error: d.error }
-        if (d.size) videoUpdate.size = d.size
-        updateVideo(d.videoId, videoUpdate)
-        const { queue, updateQueueItem } = useAppStore.getState()
+
         const queueItem = queue.find(item => item.video.id === d.videoId)
         if (queueItem && queueItem.phase === 'download') {
           const currentProgress = queueItem.progress || 0
           const newProgress = d.progress ?? 0
           if (newProgress >= currentProgress || currentProgress === 0 || currentProgress === 100) {
-            updateQueueItem(queueItem.id, { progress: d.progress, speed: d.speed, eta: d.eta, size: d.size || queueItem.size, subPhase: d.status === 'assembling' ? 'assembling' : d.status === 'watermarking' ? 'watermarking' : 'downloading' })
+            updateQueueItem(queueItem.id, {
+              progress: d.progress,
+              speed: d.speed,
+              eta: d.eta,
+              size: d.size || queueItem.size,
+              subPhase: d.status === 'assembling' ? 'assembling' : d.status === 'watermarking' ? 'watermarking' : 'downloading'
+            })
           }
         }
+
         if (d.type === 'complete') {
-          const { queue, updateQueueItem, accounts } = useAppStore.getState()
           const q = queue.find(item => item.video.id === d.videoId)
           if (q) {
             // Skip if already processing (upload phase or completed/failed)
             if (q.phase === 'upload' || q.status === 'completed' || q.status === 'failed') {
               return
             }
+
             if (d.error) {
               updateQueueItem(q.id, { status: 'failed', error: d.error, completedAt: new Date() })
               // Clear debounce and process next
-              if (processQueueDebounced) {
-                clearTimeout(processQueueDebounced)
-                processQueueDebounced = null
+              if (processQueueDebouncedRef.current) {
+                clearTimeout(processQueueDebouncedRef.current)
+                processQueueDebouncedRef.current = null
               }
               processQueueImpl()
             } else {
@@ -219,26 +275,26 @@ function App() {
                   window.electronAPI.uploadStart({ filePath: d.path, cookies: cookies || undefined, videoId: q.video.id }).catch((error) => {
                     addLog({ id: crypto.randomUUID(), timestamp: new Date(), level: 'error', message: `Chyba nahrávání ${q.video.title}: ${error}`, source: 'upload' })
                     updateQueueItem(q.id, { status: 'failed', error: String(error), completedAt: new Date() })
-                    if (processQueueDebounced) {
-                      clearTimeout(processQueueDebounced)
-                      processQueueDebounced = null
+                    if (processQueueDebouncedRef.current) {
+                      clearTimeout(processQueueDebouncedRef.current)
+                      processQueueDebouncedRef.current = null
                     }
                     processQueueImpl()
                   })
                 }).catch((error) => {
                   addLog({ id: crypto.randomUUID(), timestamp: new Date(), level: 'error', message: `Chyba čtení cookies: ${error}`, source: 'upload' })
                   updateQueueItem(q.id, { status: 'failed', error: String(error), completedAt: new Date() })
-                  if (processQueueDebounced) {
-                    clearTimeout(processQueueDebounced)
-                    processQueueDebounced = null
+                  if (processQueueDebouncedRef.current) {
+                    clearTimeout(processQueueDebouncedRef.current)
+                    processQueueDebouncedRef.current = null
                   }
                   processQueueImpl()
                 })
               } else {
                 updateQueueItem(q.id, { status: 'failed', error: 'Chybí účet nebo cesta k souboru', completedAt: new Date() })
-                if (processQueueDebounced) {
-                  clearTimeout(processQueueDebounced)
-                  processQueueDebounced = null
+                if (processQueueDebouncedRef.current) {
+                  clearTimeout(processQueueDebouncedRef.current)
+                  processQueueDebouncedRef.current = null
                 }
                 processQueueImpl()
               }
@@ -246,6 +302,7 @@ function App() {
           }
         }
       }
+
       if (d.status && d.type !== 'progress') {
         addLog({ id: crypto.randomUUID(), timestamp: new Date(), level: d.type === 'error' ? 'error' : 'info', message: `[${d.status}]`, source: 'download' })
       }
@@ -253,20 +310,26 @@ function App() {
         addLog({ id: crypto.randomUUID(), timestamp: new Date(), level: d.type === 'error' ? 'error' : 'info', message: d.message, source: 'download' })
       }
     }
+
     const handleUploadProgress = (_event: unknown, data: unknown) => {
       const d = data as { type: string; progress?: number; speed?: number; eta?: number; message?: string; error?: string; videoId?: string }
+
+      const queueState = useQueueStore.getState()
+      const { queue, updateQueueItem } = queueState
+      const appState = useAppStore.getState()
+      const { addLog, addProcessedUrl } = appState
+
       const findUploadItem = () => {
-        const { queue } = useAppStore.getState()
         if (d.videoId) return queue.find(item => item.video.id === d.videoId)
         return queue.find(item => item.phase === 'upload' && item.status === 'active')
       }
+
       if (d.progress !== undefined || d.speed !== undefined) {
-        const { updateQueueItem } = useAppStore.getState()
         const uploadItem = findUploadItem()
         if (uploadItem) updateQueueItem(uploadItem.id, { uploadProgress: d.progress, speed: d.speed, eta: d.eta })
       }
+
       if (d.type === 'complete') {
-        const { updateQueueItem } = useAppStore.getState()
         const uploadItem = findUploadItem()
         // Only process if item is still active (not already completed)
         if (uploadItem && uploadItem.status === 'active') {
@@ -274,45 +337,74 @@ function App() {
             updateQueueItem(uploadItem.id, { status: 'failed', error: d.error, completedAt: new Date() })
           } else {
             updateQueueItem(uploadItem.id, { status: 'completed', progress: 100, uploadProgress: 100, completedAt: new Date() })
-            useAppStore.getState().addProcessedUrl(uploadItem.video.url)
+            addProcessedUrl(uploadItem.video.url)
+            saveProcessedToDisk()
           }
           // Clear any pending debounce and trigger immediately
-          if (processQueueDebounced) {
-            clearTimeout(processQueueDebounced)
-            processQueueDebounced = null
+          if (processQueueDebouncedRef.current) {
+            clearTimeout(processQueueDebouncedRef.current)
+            processQueueDebouncedRef.current = null
           }
           processQueueImpl()
         }
       }
+
       if (d.message || d.error) {
         addLog({ id: crypto.randomUUID(), timestamp: new Date(), level: d.type === 'error' ? 'error' : 'info', message: d.message || d.error || '', source: 'upload' })
       }
     }
+
     const handleDiscoverProgress = (_event: unknown, data: unknown) => {
       const d = data as { type: string; progress?: number; message?: string; candidates?: VideoCandidate[]; error?: string; success?: boolean }
+      const appState = useAppStore.getState()
+      const { setDiscovering, setVideoCandidates, addLog } = appState
+
       if (d.type === 'progress') {
         setDiscovering(true, d.progress || 0, d.message || '')
+        videoStore.setDiscovering(true, d.progress || 0, d.message || '')
         if (d.message) addLog({ id: crypto.randomUUID(), timestamp: new Date(), level: 'info', message: d.message, source: 'discover' })
       } else if (d.type === 'status') {
         setDiscovering(true, d.progress || 0, d.message || '')
+        videoStore.setDiscovering(true, d.progress || 0, d.message || '')
       } else if (d.type === 'complete') {
         setDiscovering(false, 100, d.success ? 'Hotovo' : 'Chyba')
+        videoStore.setDiscovering(false, 100, d.success ? 'Hotovo' : 'Chyba')
         if (d.success && d.candidates) {
           setVideoCandidates(d.candidates)
+          // Sync to useVideoStore for VideoList component
+          videoStore.setVideoCandidates(d.candidates)
           addLog({ id: crypto.randomUUID(), timestamp: new Date(), level: 'success', message: `Nalezeno ${d.candidates.length} videí k stažení`, source: 'discover' })
         }
         if (d.error) addLog({ id: crypto.randomUUID(), timestamp: new Date(), level: 'error', message: `Chyba při vyhledávání: ${d.error}`, source: 'discover' })
       }
     }
+
     window.electronAPI.onDownloadProgress(handleDownloadProgress)
     window.electronAPI.onUploadProgress(handleUploadProgress)
     window.electronAPI.onDiscoverProgress(handleDiscoverProgress)
+
     return () => {
       window.electronAPI.removeListener('download:progress', handleDownloadProgress)
       window.electronAPI.removeListener('upload:progress', handleUploadProgress)
       window.electronAPI.removeListener('discover:progress', handleDiscoverProgress)
     }
-  }, [updateVideo, addLog, setVideoCandidates, setDiscovering, processQueue])
+  }, [processQueueImpl, addLog, addProcessedUrl, setVideoCandidates, setDiscovering])
+
+  // Listen for processed.json updates and reload
+  useEffect(() => {
+    if (!window.electronAPI) return
+
+    const handleProcessedUpdated = () => {
+      console.log('[App] processed.json updated, reloading...')
+      loadProcessedFromDisk()
+    }
+
+    window.electronAPI.onProcessedUpdated(handleProcessedUpdated)
+
+    return () => {
+      window.electronAPI.removeListener('processed:updated', handleProcessedUpdated)
+    }
+  }, [])
 
   const navItems = [
     { id: 'videos', label: localeStore.t('nav.videos'), icon: Search },

@@ -1,9 +1,10 @@
-import { useAppStore } from '../store'
+import { useUIStore } from '../store'
 import { useLocaleStore } from '../i18n'
 import { RefreshCw, Settings, Minus, UploadCloud } from 'lucide-react'
 
 export function Header() {
-  const { isProcessing, addLog } = useAppStore()
+  const uiStore = useUIStore()
+  const { isProcessing, addLog } = uiStore
   const t = useLocaleStore(state => state.t)
 
   const handleRefresh = async () => {
@@ -113,7 +114,7 @@ export function Header() {
 
         <button
           data-elname="settings-button"
-          onClick={() => useAppStore.getState().setActiveTab('settings')}
+          onClick={() => uiStore.setActiveTab('settings')}
           style={{
             padding: 8,
             backgroundColor: 'transparent',

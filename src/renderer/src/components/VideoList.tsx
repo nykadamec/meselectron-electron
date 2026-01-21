@@ -1,25 +1,43 @@
 import { useEffect, useState } from 'react'
-import { useAppStore } from '../store'
+import { useVideoStore, useProcessedStore, useAppStore, useQueueStore, useAccountStore, useSettingsStore } from '../store'
 import { VideoListItem } from './VideoListItem'
+import type { VideoCandidate } from '../types'
 
 export function VideoList() {
+  const videoStore = useVideoStore()
+  const processedStore = useProcessedStore()
+  const accountStore = useAccountStore()
+  const settingsStore = useSettingsStore()
+
+  // Get queue from useQueueStore (queue operations)
+  const queueStore = useQueueStore()
+  const { queue, addToQueue } = queueStore
+
+  // Get other state from useAppStore
   const {
-    videoCandidates,
+    addVideo,
+    clearCandidates,
     selectedCandidates,
     isDiscovering,
-    isProcessing,
     discoverProgress,
     discoverMessage,
-    processedVideoUrls,
     toggleCandidate,
     selectAllCandidates,
     setDiscovering,
-    clearCandidates
+    videoCandidates,
+    setActiveTab,
+    accounts
   } = useAppStore()
 
+  const { urls: processedUrls } = processedStore
+
+  const { settings } = settingsStore
+
+  const { isProcessing } = useAppStore.getState()
+
   // Separate processed vs available videos
-  const processedVideos = videoCandidates.filter(c => processedVideoUrls.has(c.url))
-  const availableVideos = videoCandidates.filter(c => !processedVideoUrls.has(c.url))
+  const processedVideos = videoCandidates.filter((c: VideoCandidate) => processedUrls.has(c.url))
+  const availableVideos = videoCandidates.filter((c: VideoCandidate) => !processedUrls.has(c.url))
 
   // Collapsible state for processed section
   const [isProcessedCollapsed, setIsProcessedCollapsed] = useState(false)
@@ -38,7 +56,6 @@ export function VideoList() {
     clearCandidates()
 
     // Get account cookies
-    const accounts = useAppStore.getState().accounts
     if (accounts.length === 0) return
 
     const cookies = await window.electronAPI.accountsReadCookies(accounts[0].id)
@@ -49,7 +66,7 @@ export function VideoList() {
     try {
       await window.electronAPI.discoverStart({
         cookies,
-        count: useAppStore.getState().settings.videoCount
+        count: settings.videoCount
       })
     } catch (error) {
       console.error('Discover failed:', error)
@@ -59,7 +76,7 @@ export function VideoList() {
 
   // Select all available (non-processed) videos
   const handleSelectAllAvailable = () => {
-    availableVideos.forEach(video => {
+    availableVideos.forEach((video: VideoCandidate) => {
       if (!selectedCandidates.includes(video.url)) {
         toggleCandidate(video.url)
       }
@@ -68,7 +85,7 @@ export function VideoList() {
 
   // Deselect all selected candidates
   const handleDeselectAll = () => {
-    selectedCandidates.forEach(url => {
+    selectedCandidates.forEach((url: string) => {
       if (selectedCandidates.includes(url)) {
         toggleCandidate(url)
       }
@@ -77,24 +94,40 @@ export function VideoList() {
 
   // Process selected videos - uses existing download logic from App.tsx
   const handleProcessSelected = async () => {
-    if (selectedCandidates.length === 0) return
+    console.log('[ProcessButton] clicked, selectedCandidates:', selectedCandidates.length)
+    console.log('[ProcessButton] accounts:', accounts.length)
 
-    // Clear candidates to hide the video list and show queue
+    if (selectedCandidates.length === 0) {
+      console.log('[ProcessButton] early exit - no selected candidates')
+      return
+    }
+
+    // Get account cookies first - fail early with feedback
+    if (accounts.length === 0) {
+      console.log('[ProcessButton] no accounts found')
+      alert('Žádné účty nejsou k dispozici. Přidejte účet v nastavení.')
+      return
+    }
+
+    console.log('[ProcessButton] reading cookies for account:', accounts[0].id)
+    const cookies = await window.electronAPI.accountsReadCookies(accounts[0].id)
+    console.log('[ProcessButton] cookies:', cookies ? 'found' : 'null')
+
+    if (!cookies) {
+      alert('Účet není přihlášený. Přihlaste se na prehrajto.cz.')
+      return
+    }
+
+    // Get queue length before adding
+    const currentQueueLength = queue.length
+
+    // Now clear candidates and add to queue
     clearCandidates()
 
-    // Get account cookies
-    const accounts = useAppStore.getState().accounts
-    if (accounts.length === 0) return
-
-    const cookies = await window.electronAPI.accountsReadCookies(accounts[0].id)
-    if (!cookies) return
-
-    // Get addToQueue from store
-    const { addToQueue, addVideo } = useAppStore.getState()
-
     // Add each selected video to the queue
+    let addedCount = 0
     for (const url of selectedCandidates) {
-      const candidate = videoCandidates.find(c => c.url === url)
+      const candidate = videoCandidates.find((c: VideoCandidate) => c.url === url)
       if (candidate) {
         const videoId = crypto.randomUUID()
 
@@ -122,18 +155,24 @@ export function VideoList() {
           },
           accountId: accounts[0].id,
           status: 'pending',
-          priority: useAppStore.getState().queue.length + 1,
+          priority: currentQueueLength + addedCount + 1,
           cookies: cookies || '',
           addedAt: new Date()
         })
+        addedCount++
       }
     }
 
     // Clear selection
     selectAllCandidates()
 
-    // Trigger queue processing
-    useAppStore.getState().triggerQueueProcess?.()
+    // Switch to downloads tab and trigger queue processing
+    if (addedCount > 0) {
+      console.log('[ProcessButton] success - added', addedCount, 'items to queue')
+      setActiveTab('downloads')
+      // Trigger the queue to start processing
+      queueStore.triggerQueueProcess()
+    }
   }
 
   return (
@@ -214,7 +253,7 @@ export function VideoList() {
               </svg>
               Již zpracovaná ({processedVideos.length})
             </h3>
-            {!isProcessedCollapsed && processedVideos.map(video => (
+            {!isProcessedCollapsed && processedVideos.map((video: VideoCandidate) => (
               <VideoListItem
                 key={video.url}
                 video={video}
@@ -230,7 +269,7 @@ export function VideoList() {
             <h3 data-elname="section-title" className={`text-sm text-text-muted uppercase tracking-wider mt-4 mb-2 sticky top-0 bg-bg-main py-1 ${processedVideos.length > 0 ? '' : ''}`}>
               K dispozici ({availableVideos.length})
             </h3>
-            {availableVideos.map(video => (
+            {availableVideos.map((video: VideoCandidate) => (
               <VideoListItem
                 key={video.url}
                 video={video}

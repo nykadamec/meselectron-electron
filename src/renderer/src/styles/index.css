@@ -254,8 +254,13 @@
 }
 
 .input-base::placeholder {
-      padding-left: 25px;
+      
 
+}
+
+.input-base {
+      padding-left: 35px !important;
+      font-size: 13px !important;
 }
 
 /* Alias for backward compatibility */

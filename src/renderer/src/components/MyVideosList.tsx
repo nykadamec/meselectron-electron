@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { useAppStore } from '../store'
+import { useMyVideosStore, useAccountStore } from '../store'
 import { useLocaleStore } from '../i18n'
 import type { MyVideo } from '../types'
 import { MyVideosCard as VideoCard } from './MyVideosCard'
@@ -9,29 +9,34 @@ import { RefreshCw, ChevronLeft, ChevronRight, PlayCircle, Search, X } from 'luc
 export function MyVideosList() {
   const { t } = useLocaleStore()
   const topRef = useRef<HTMLDivElement>(null)
+
+  const myVideosStore = useMyVideosStore()
+  const accountStore = useAccountStore()
+
   const {
-    myVideos,
-    myVideosPage,
-    myVideosHasMore,
-    myVideosSearchQuery,
-    setMyVideosSearchQuery,
-    isLoadingMyVideos,
-    myVideosError,
-    loadMyVideos,
-    clearMyVideos,
-    deleteMyVideo,
-    accounts
-  } = useAppStore()
+    videos,
+    page,
+    hasMore,
+    searchQuery,
+    isLoading,
+    error,
+    setSearchQuery,
+    loadVideos,
+    clear,
+    deleteVideo
+  } = myVideosStore
+
+  const { accounts } = accountStore
+
+  const activeAccount = accounts.find(acc => acc.isActive)
 
   const [deleteModalOpen, setDeleteModalOpen] = useState(false)
   const [videoToDelete, setVideoToDelete] = useState<MyVideo | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
 
-  const activeAccount = accounts.find(acc => acc.isActive)
-
   // Filter videos based on search query
-  const filteredVideos = myVideos.filter(video =>
-    video.title.toLowerCase().includes(myVideosSearchQuery.toLowerCase())
+  const filteredVideos = videos.filter(video =>
+    video.title.toLowerCase().includes(searchQuery.toLowerCase())
   )
 
   const handleRefresh = async () => {
@@ -40,11 +45,11 @@ export function MyVideosList() {
     try {
       const cookies = await window.electronAPI.accountsReadCookies(activeAccount.id)
       if (cookies) {
-        clearMyVideos()
-        await loadMyVideos(1, cookies)
+        clear()
+        await loadVideos(1, cookies)
       }
-    } catch (error) {
-      console.error('Failed to refresh videos:', error)
+    } catch (err) {
+      console.error('Failed to refresh videos:', err)
     }
   }
 
@@ -54,12 +59,10 @@ export function MyVideosList() {
     try {
       const cookies = await window.electronAPI.accountsReadCookies(activeAccount.id)
       if (cookies) {
-        // Clear current videos to show loading state for the new page
-        useAppStore.setState({ myVideos: [] })
-        await loadMyVideos(newPage, cookies)
+        await loadVideos(newPage, cookies)
       }
-    } catch (error) {
-      console.error('Failed to change page:', error)
+    } catch (err) {
+      console.error('Failed to change page:', err)
     }
   }
 
@@ -79,7 +82,7 @@ export function MyVideosList() {
     try {
       const cookies = await window.electronAPI.accountsReadCookies(activeAccount.id)
       if (cookies) {
-        await deleteMyVideo(videoToDelete.id, cookies)
+        await deleteVideo(videoToDelete.id, cookies)
       }
     } catch (err) {
       console.error('Failed to delete video:', err)
@@ -90,26 +93,26 @@ export function MyVideosList() {
   }
 
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setMyVideosSearchQuery(e.target.value)
+    setSearchQuery(e.target.value)
   }
 
   const handleSearchClear = () => {
-    setMyVideosSearchQuery('')
+    setSearchQuery('')
   }
 
   // Auto-load on mount if empty
   useEffect(() => {
-    if (myVideos.length === 0 && !isLoadingMyVideos && activeAccount) {
+    if (videos.length === 0 && !isLoading && activeAccount) {
       handleRefresh()
     }
   }, [activeAccount?.id])
 
   // Scroll to top when page changes or videos are loaded
   useEffect(() => {
-    if (myVideos.length > 0 || isLoadingMyVideos) {
+    if (videos.length > 0 || isLoading) {
       topRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
     }
-  }, [myVideosPage, isLoadingMyVideos])
+  }, [page, isLoading])
 
   return (
     <div data-elname="my-videos-list" className="flex flex-col gap-4">
@@ -131,10 +134,10 @@ export function MyVideosList() {
         <button
           data-elname="refresh-button"
           onClick={handleRefresh}
-          disabled={isLoadingMyVideos || !activeAccount}
+          disabled={isLoading || !activeAccount}
           className="btn-primary flex items-center gap-2"
         >
-          <RefreshCw className={`w-4 h-4 ${isLoadingMyVideos ? 'animate-spin' : ''}`} />
+          <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
           {t('actions.refresh')}
         </button>
       </div>
@@ -146,11 +149,11 @@ export function MyVideosList() {
           data-elname="search-input"
           type="text"
           placeholder={t('search.placeholder')}
-          value={myVideosSearchQuery}
+          value={searchQuery}
           onChange={handleSearchChange}
           className="input-base pl-12 pr-10"
         />
-        {myVideosSearchQuery && (
+        {searchQuery && (
           <button
             data-elname="clear-search-btn"
             onClick={handleSearchClear}
@@ -161,9 +164,9 @@ export function MyVideosList() {
         )}
       </div>
 
-      {myVideosError && (
+      {error && (
         <div data-elname="error-banner" className="p-4 bg-red-500/10 border border-red-500 rounded-lg">
-          <p data-elname="error-text" className="text-red-500 text-sm">{myVideosError}</p>
+          <p data-elname="error-text" className="text-red-500 text-sm">{error}</p>
         </div>
       )}
 
@@ -177,87 +180,33 @@ export function MyVideosList() {
             ))}
           </div>
         </div>
-      ) : myVideos.length === 0 && !isLoadingMyVideos && process.env.NODE_ENV === 'development' ? (
-        // Demo mode for testing new design
-        <div className="bg-surface/50 rounded-xl overflow-hidden">
-          <div className="flex flex-col">
-            <div className="p-1.5">
-              <VideoCard
-                video={{
-                  id: 'demo1',
-                  title: 'Toto je ukázkové video s dlouhým názvem pro testování ořezávání textu na dva řádky',
-                  thumbnail: 'https://picsum.photos/seed/video1/320/180',
-                  views: 12543,
-                  addedAt: new Date().toISOString(),
-                  url: 'https://example.com/video1',
-                  size: '1.2 GB',
-                  likes: 342,
-                  dislikes: 12,
-                }}
-                onDeleteClick={() => {}}
-              />
-            </div>
-            <div className="p-1.5">
-              <VideoCard
-                video={{
-                  id: 'demo2',
-                  title: 'Krátké video',
-                  thumbnail: 'https://picsum.photos/seed/video2/320/180',
-                  views: 890,
-                  addedAt: new Date(Date.now() - 86400000).toISOString(),
-                  url: 'https://example.com/video2',
-                  size: '456 MB',
-                  likes: 45,
-                  dislikes: 3,
-                }}
-                onDeleteClick={() => {}}
-              />
-            </div>
-            <div className="p-1.5">
-              <VideoCard
-                video={{
-                  id: 'demo3',
-                  title: 'Video bez thumbnailu s dlouhým názvem pro testování',
-                  thumbnail: undefined,
-                  views: 1500000,
-                  addedAt: new Date(Date.now() - 172800000).toISOString(),
-                  url: 'https://example.com/video3',
-                  size: '3.4 GB',
-                  likes: 12543,
-                  dislikes: 89,
-                }}
-                onDeleteClick={() => {}}
-              />
-            </div>
-          </div>
-        </div>
-      ) : !isLoadingMyVideos && (
+      ) : videos.length === 0 && !isLoading ? (
         <div data-elname="empty-state" className="text-center py-12 bg-surface border border-dashed border-border rounded-xl">
           <PlayCircle data-elname="empty-icon" className="w-12 h-12 text-text-muted mx-auto mb-4" />
           <p data-elname="empty-title" className="text-text-secondary">
-            {myVideosSearchQuery ? t('search.noResults') : t('empty.myVideos')}
+            {searchQuery ? t('search.noResults') : t('empty.myVideos')}
           </p>
           <p data-elname="empty-help" className="text-xs text-text-muted mt-2">
-            {myVideosSearchQuery
+            {searchQuery
               ? t('empty.myVideosHelp')
               : t('empty.myVideosHelp')}
           </p>
         </div>
-      )}
+      ) : null}
 
-      {isLoadingMyVideos && (
+      {isLoading && (
         <div data-elname="loading-spinner" className="flex justify-center py-8">
           <div className="spinner" />
         </div>
       )}
 
       {/* Pagination */}
-      {(myVideos.length > 0 || myVideosPage > 1) && !isLoadingMyVideos && (
+      {(videos.length > 0 || page > 1) && !isLoading && (
         <div data-elname="pagination" style={{backgroundColor: '#121212'}} className="flex justify-center items-center gap-4 mt-4 bg-surface p-3 rounded-lg shadow-sm">
           <button
             data-elname="prev-page-btn"
-            onClick={() => handlePageChange(myVideosPage - 1)}
-            disabled={myVideosPage <= 1}
+            onClick={() => handlePageChange(page - 1)}
+            disabled={page <= 1}
             className="btn-secondary p-2 disabled:opacity-30 flex items-center justify-center min-w-[40px]"
             title={t('actions.back')}
           >
@@ -268,12 +217,11 @@ export function MyVideosList() {
             <span data-elname="page-label" className="text-sm font-medium text-text-muted">{t('pagination.page')}</span>
             <select
               data-elname="page-selector"
-              value={myVideosPage}
+              value={page}
               onChange={handleJumpToPage}
               className="bg-bg-hover border border-border rounded px-2 py-1 text-sm font-bold focus:outline-none focus:ring-1 focus:ring-accent cursor-pointer"
             >
-              {/* Generate page options - show up to current + 20 pages */}
-              {Array.from({ length: Math.max(myVideosPage + 20, 20) }, (_, i) => i + 1).map(p => (
+              {Array.from({ length: Math.max(page + 20, 20) }, (_, i) => i + 1).map(p => (
                 <option key={p} value={p}>{p}</option>
               ))}
             </select>
@@ -282,8 +230,8 @@ export function MyVideosList() {
 
           <button
             data-elname="next-page-btn"
-            onClick={() => handlePageChange(myVideosPage + 1)}
-            disabled={!myVideosHasMore}
+            onClick={() => handlePageChange(page + 1)}
+            disabled={!hasMore}
             className="btn-secondary p-2 disabled:opacity-30 flex items-center justify-center min-w-[40px]"
             title={t('actions.next')}
           >

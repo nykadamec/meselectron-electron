@@ -1,13 +1,7 @@
 import * as amplitude from '@amplitude/analytics-node';
 import  dotenv from 'dotenv';
-import * as fs from 'fs';
-import * as path from 'path';
 dotenv.config();
-
-// Declare __nonWebpack_require__ for asar module loading (used in production only)
-declare const __nonWebpack_require__: (modulePath: string) => unknown
-
-
+import { getAppVersion } from './utils/version';
 
 amplitude.init('e01278f75df82de79029a7038985bcf');
 
@@ -49,26 +43,6 @@ export function trackAppClose(): void {
 export function flushAnalytics(): void {
   if (!isInitialized) return;
   amplitude.flush();
-}
-
-// Get app version from package.json (robust for dev and production)
-function getAppVersion(): string {
-  try {
-    const isDev = process.env.NODE_ENV === 'development' || !process.env.NODE_ENV
-
-    if (isDev) {
-      const packageJsonPath = path.join(process.cwd(), 'package.json')
-      const data = fs.readFileSync(packageJsonPath, 'utf-8')
-      const packageJson = JSON.parse(data)
-      return packageJson.version || '0.0.0'
-    } else {
-      // In production, package.json is inside app.asar at root level
-      const packageJson = __nonWebpack_require__(path.join(process.resourcesPath, 'app.asar/package.json')) as { version?: string }
-      return packageJson.version || '0.0.0'
-    }
-  } catch {
-    return '0.0.0'
-  }
 }
 
 export function trackAppLaunch(): void {

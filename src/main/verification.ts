@@ -214,9 +214,12 @@ async function setupGpg(): Promise<void> {
       await execAsync(`gpg --import --batch --yes "${keyFile}"`)
     } catch {
       // Key might already exist, ignore error
+      console.warn('[Verification] GPG key import skipped (may already exist)')
     }
 
-    await fs.unlink(keyFile).catch(() => {})
+    await fs.unlink(keyFile).catch(() => {
+      console.warn('[Verification] Could not delete temporary GPG key file')
+    })
   } catch (error) {
     console.error(`[UPDATER] GPG setup failed: ${error}`)
   }

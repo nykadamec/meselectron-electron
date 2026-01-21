@@ -1,6 +1,7 @@
 // Video Discovery Worker - scrapes prehrajto.cz for video links
 import { parentPort, workerData } from 'worker_threads'
 import axios from 'axios'
+import { parseCookieFile } from './utils/cookie.js'
 
 // Helper to safely post messages (parentPort is always available in worker threads)
 function sendProgress(data: unknown) {
@@ -22,28 +23,6 @@ interface DiscoverOptions {
   count: number
   cookies?: string  // Backwards compatibility
   videoId?: string
-}
-
-/**
- * Parse Set-Cookie format to cookie header string
- * Format: name=value; Domain=...; Path=...; Secure; HttpOnly
- */
-function parseCookieFile(content: string): string {
-  const cookies: string[] = []
-  const lines = content.trim().split('\n')
-
-  for (const line of lines) {
-    const trimmed = line.trim()
-    if (!trimmed || trimmed.startsWith('#')) continue
-
-    // Set-Cookie format: first part before semicolon is name=value
-    const cookiePart = trimmed.split(';')[0]
-    if (cookiePart && cookiePart.includes('=')) {
-      cookies.push(cookiePart)
-    }
-  }
-
-  return cookies.join('; ')
 }
 
 /**

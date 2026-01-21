@@ -74,7 +74,7 @@ interface ElectronAPI {
     filePath: string
     cookies?: string
   }) => Promise<{ success: boolean }>
-  uploadStop: () => void
+  uploadStop: () => Promise<{ success: boolean }>
 
   // Video Discovery
   discoverStart: (options: {
@@ -123,6 +123,12 @@ interface ElectronAPI {
     } | null
   }>
   updaterDownload: (url: string) => Promise<void>
+  updaterVerify: () => Promise<{
+    valid: boolean
+    size?: number
+    hash?: string
+    error?: string
+  }>
   updaterInstall: () => Promise<void>
   updaterCancel: () => void
   updaterClear: () => Promise<void>

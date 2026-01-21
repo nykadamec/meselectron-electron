@@ -5,6 +5,7 @@ import axios from 'axios'
 import fs from 'fs'
 import fsp from 'fs/promises'
 import path from 'path'
+import { parseCookieFile } from './utils/cookie.js'
 
 // Track spawned processes for cleanup on cancellation
 const activeProcesses: ChildProcess[] = []
@@ -43,28 +44,6 @@ function sendProgress(data: unknown) {
 const CHUNK_SIZE = 1024 * 1024 // 1MB chunks (optimized for lower RAM usage)
 const MIN_VIDEO_SIZE_MB = 300
 const MAX_VIDEO_SIZE_MB = 20480 // 20GB
-
-/**
- * Parse Set-Cookie format to cookie header string
- * Format: name=value; Domain=...; Path=...; Secure; HttpOnly
- */
-function parseCookieFile(content) {
-  const cookies = []
-  const lines = content.trim().split('\n')
-
-  for (const line of lines) {
-    const trimmed = line.trim()
-    if (!trimmed || trimmed.startsWith('#')) continue
-
-    // Set-Cookie format: first part before semicolon is name=value
-    const cookiePart = trimmed.split(';')[0]
-    if (cookiePart && cookiePart.includes('=')) {
-      cookies.push(cookiePart)
-    }
-  }
-
-  return cookies.join('; ')
-}
 
 /**
  * Call IPC handler from worker (returns a promise)

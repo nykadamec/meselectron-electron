@@ -20,6 +20,7 @@ import { CSS } from '@dnd-kit/utilities'
 import { Trash2 } from 'lucide-react'
 import type { QueueItem } from '../types'
 import { useLocaleStore } from '../i18n'
+import { formatFileSize, formatSpeed, formatEta, stripSizePrefix } from '../utils/format'
 
 interface QueueListProps {
   queue: QueueItem[]
@@ -31,40 +32,6 @@ interface QueueListProps {
   onRemove?: (itemId: string) => void
   onReorder?: (newQueue: QueueItem[]) => void
   onKill?: (itemId: string) => void
-}
-
-// Helper functions for formatting
-const formatSize = (bytes?: number) => {
-  if (!bytes) return 'N/A'
-  const k = 1024
-  const sizes = ['B', 'KB', 'MB', 'GB']
-  const i = Math.floor(Math.log(bytes) / Math.log(k))
-  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`
-}
-
-const formatSpeed = (bytesPerSecond?: number) => {
-  if (!bytesPerSecond) return '0 B/s'
-  const k = 1024
-  const sizes = ['B/s', 'KB/s', 'MB/s', 'GB/s']
-  const i = Math.floor(Math.log(bytesPerSecond) / Math.log(k))
-  return `${parseFloat((bytesPerSecond / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`
-}
-
-const formatETA = (seconds?: number) => {
-  if (!seconds || seconds < 0) return 'N/A'
-  const mins = Math.floor(seconds / 60)
-  const secs = Math.floor(seconds % 60)
-  return `${mins}m ${secs}s`
-}
-
-/**
- * Strip size prefix from title
- * Format: "[  2.62 GB  ] - Some Title" -> "Some Title"
- */
-const stripSizePrefix = (title: string): string => {
-  // Pattern: [  XX.XX GB  ] - or [  XX.XX MB  ] - or [  X.XX GB  ] -
-  const sizePrefixPattern = /^\[\s*[\d.]+\s*(GB|MB|KB)\s*\]\s*-\s*/
-  return title.replace(sizePrefixPattern, '').trim()
 }
 
 // Sortable Queue Item Component
@@ -218,7 +185,7 @@ function SortableQueueItem({
                 padding: '2px 6px',
                 borderRadius: 4
               }}>
-                [{formatSize(item.size)}]
+                [{formatFileSize(item.size)}]
               </span>
             )}
 
@@ -300,9 +267,9 @@ function SortableQueueItem({
                 fontSize: 11,
                 color: 'var(--color-text-muted)'
               }}>
-                <span data-elname="size-text">{formatSize(item.size)}</span>
+                <span data-elname="size-text">{formatFileSize(item.size)}</span>
                 <span data-elname="speed-text">{formatSpeed(item.speed)}</span>
-                <span data-elname="eta-text">ETA: {formatETA(item.eta)}</span>
+                <span data-elname="eta-text">ETA: {formatEta(item.eta)}</span>
               </div>
             </div>
           )}
@@ -317,7 +284,7 @@ function SortableQueueItem({
               fontSize: 11,
               color: 'var(--color-text-muted)'
             }}>
-              {item.size && <span data-elname="size-text">{formatSize(item.size)}</span>}
+              {item.size && <span data-elname="size-text">{formatFileSize(item.size)}</span>}
               <span data-elname="status-text" style={{
                 color: statusColor,
                 fontWeight: 500

@@ -106,6 +106,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   updaterInstall: function() {
     return ipcRenderer.invoke('updater:install')
   },
+  updaterVerify: function() {
+    return ipcRenderer.invoke('updater:verify')
+  },
   updaterCancel: function() {
     return ipcRenderer.send('updater:cancel')
   },
@@ -120,6 +123,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   onUpdaterProgress: function(callback) {
     ipcRenderer.on('updater:progress', callback)
+  },
+
+  // Upload API
+  uploadStop: function() {
+    return ipcRenderer.invoke('upload:stop')
   },
 
   // i18n API

@@ -12,7 +12,7 @@
     "sync": "node scripts/sync-config.js",
     "sync:watch": "node --watch scripts/sync-config.js",
     "dev": "electron-vite dev",
-    "build": "npm run sync && electron-vite build && tsc -p tsconfig.workers.json && for f in dist/workers/*.worker.js; do mv \"$f\" \"${f%.js}.cjs\" 2>/dev/null || true; done",
+    "build": "npm run sync && electron-vite build && tsc -p tsconfig.workers.json",
     "build:main": "tsc -p tsconfig.node.json",
     "build:workers": "tsc -p tsconfig.workers.json",
     "build:mac": "electron-builder --mac --arm64",

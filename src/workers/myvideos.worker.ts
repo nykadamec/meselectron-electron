@@ -1,6 +1,7 @@
 // My Videos Worker - scrapes prehrajto.cz/profile/nahrana-videa
 import { parentPort, workerData } from 'worker_threads'
 import axios from 'axios'
+import { parseCookieFile } from './utils/cookie.js'
 
 // Helper to safely post messages (parentPort is always available in worker threads)
 function sendProgress(data: unknown) {
@@ -28,33 +29,6 @@ interface MyVideosResponse {
   hasMore: boolean
   total: number
   page: number
-}
-
-/**
- * Parse Set-Cookie format to cookie header string or return as-is if already a header
- */
-function parseCookieFile(content: string): string {
-  if (!content) return ''
-  
-  // If it already looks like a cookie header (multiple semicolons, no newlines), return as is
-  if (content.includes(';') && !content.includes('\n') && content.includes('=')) {
-    return content
-  }
-
-  const cookies: string[] = []
-  const lines = content.trim().split('\n')
-
-  for (const line of lines) {
-    const trimmed = line.trim()
-    if (!trimmed || trimmed.startsWith('#')) continue
-
-    const cookiePart = trimmed.split('\t').pop()?.split(';')[0] || trimmed.split(';')[0]
-    if (cookiePart && cookiePart.includes('=')) {
-      cookies.push(cookiePart)
-    }
-  }
-
-  return cookies.join('; ')
 }
 
 /**

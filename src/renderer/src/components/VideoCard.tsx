@@ -1,4 +1,5 @@
 import type { Video, VideoCandidate } from '../types'
+import { formatFileSize, formatSpeed, formatEta } from '../utils/format'
 
 interface VideoCardProps {
   video: Video | VideoCandidate
@@ -32,29 +33,6 @@ const statusLabels = {
 }
 
 export function VideoCard({ video, variant = 'grid', size, selected, processed, onClick }: VideoCardProps) {
-  const formatSize = (bytes?: number) => {
-    if (!bytes) return 'N/A'
-    const k = 1024
-    const sizes = ['B', 'KB', 'MB', 'GB']
-    const i = Math.floor(Math.log(bytes) / Math.log(k))
-    return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`
-  }
-
-  const formatSpeed = (bytesPerSecond?: number) => {
-    if (!bytesPerSecond) return '0 B/s'
-    const k = 1024
-    const sizes = ['B/s', 'KB/s', 'MB/s', 'GB/s']
-    const i = Math.floor(Math.log(bytesPerSecond) / Math.log(k))
-    return `${parseFloat((bytesPerSecond / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`
-  }
-
-  const formatETA = (seconds?: number) => {
-    if (!seconds || seconds < 0) return 'N/A'
-    const mins = Math.floor(seconds / 60)
-    const secs = Math.floor(seconds % 60)
-    return `${mins}m ${secs}s`
-  }
-
   const isVideoCandidate = !('status' in video)
   const videoStatus = 'status' in video ? video.status : 'pending'
   const videoSize = size ?? ('size' in video ? video.size : undefined)
@@ -90,7 +68,7 @@ export function VideoCard({ video, variant = 'grid', size, selected, processed, 
         <div className="flex-1 min-w-0">
           <p data-elname="video-title" className="font-medium text-sm truncate">{video.title}</p>
           {videoSize && (
-            <p data-elname="video-size" className="text-xs text-text-muted">{formatSize(videoSize)}</p>
+            <p data-elname="video-size" className="text-xs text-text-muted">{formatFileSize(videoSize)}</p>
           )}
         </div>
         <div className="flex-shrink-0 flex items-center gap-2">
@@ -139,7 +117,7 @@ export function VideoCard({ video, variant = 'grid', size, selected, processed, 
                 {statusLabels[videoStatus]}
               </span>
             )}
-            <span data-elname="video-size" className="text-xs text-text-muted">{formatSize(videoSize)}</span>
+            <span data-elname="video-size" className="text-xs text-text-muted">{formatFileSize(videoSize)}</span>
           </div>
 
           {/* Progress bar - only for Video with status */}
@@ -154,7 +132,7 @@ export function VideoCard({ video, variant = 'grid', size, selected, processed, 
               </div>
               <div className="flex justify-between text-xs text-text-muted">
                 <span data-elname="speed-text">{formatSpeed(videoSpeed)}</span>
-                <span data-elname="eta-text">ETA: {formatETA(videoEta)}</span>
+                <span data-elname="eta-text">ETA: {formatEta(videoEta)}</span>
               </div>
             </div>
           )}

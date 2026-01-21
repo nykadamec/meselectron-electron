@@ -5,6 +5,7 @@ import axios from 'axios'
 import { chromium } from 'playwright'
 import { readFile, writeFile, readdir } from 'fs/promises'
 import path from 'path'
+import { getProjectRoot } from './utils/paths.js'
 
 interface SessionState {
   accountId: string
@@ -79,16 +80,6 @@ async function isSessionValid(cookies: string): Promise<boolean> {
     return false
   }
 }
-
-/**
- * Get project root directory
- * Uses OS-specific user data path: %APPDATA%\prehrajto-autopilot (Windows) or ~/Library/Application Support/prehrajto-autopilot (macOS)
- */
-function getProjectRoot(): string {
-  const userDataPath = process.env.APPDATA || path.join(process.env.HOME || '', 'Library/Application Support')
-  return path.join(userDataPath, 'prehrajto-autopilot')
-}
-
 
 /**
  * Perform login using Playwright browser

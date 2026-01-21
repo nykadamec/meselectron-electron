@@ -5,12 +5,17 @@ import { existsSync } from 'fs'
 import axios from 'axios'
 import { Worker } from 'worker_threads'
 import os from 'os'
+import { getProjectRoot, getUserDataPath, getAppDataPath } from './utils/paths'
+import { getAppVersion } from './utils/version'
 
 // Declare __nonWebpack_require__ for asar module loading (used in production only)
 declare const __nonWebpack_require__: (modulePath: string) => unknown
 
 // Global variable to track active download worker for cancellation
 let activeDownloadWorker: Worker | null = null
+
+// Global variable to track active upload worker for cancellation
+let activeUploadWorker: Worker | null = null
 
 // Types
 interface Account {
@@ -32,18 +37,6 @@ interface Settings {
   nospeed: boolean
   addWatermark: boolean
   outputDir: string
-}
-
-// Get user data path for settings
-const getUserDataPath = () => process.env.APPDATA || path.join(process.env.HOME || '', 'Library/Application Support')
-
-// Get app-specific data path for persistence
-const getAppDataPath = () => path.join(getUserDataPath(), 'prehrajto-autopilot')
-
-// Get the path to the project root (where DATA folder is located)
-// Uses OS-specific user data path: %APPDATA%\prehrajto-autopilot (Windows) or ~/Library/Application Support/prehrajto-autopilot (macOS)
-const getProjectRoot = () => {
-  return getAppDataPath()
 }
 
 // Settings handlers
@@ -653,7 +646,7 @@ ipcMain.handle('platform:info', () => {
 // Download handler using worker
 ipcMain.handle('download:start', async (_, options: { url: string; outputPath?: string; cookies?: string; videoId?: string; videoTitle?: string; maxConcurrent?: number; addWatermark?: boolean; ffmpegPath?: string; hqProcessing?: boolean }) => {
   return new Promise((resolve, reject) => {
-    const workerPath = path.join(__dirname, '../workers/download.worker.cjs')
+    const workerPath = path.join(__dirname, '../workers/download.worker.js')
 
     // Generate outputPath if not provided
     // Use videoTitle if available, sanitized for filesystem
@@ -1031,7 +1024,7 @@ ipcMain.handle('upload:start', async (_, options: { filePath: string; accountId?
   }
 
   return new Promise((resolve, reject) => {
-    const workerPath = path.join(__dirname, '../workers/upload.worker.cjs')
+    const workerPath = path.join(__dirname, '../workers/upload.worker.js')
 
     const workerPayload = {
       ...options,
@@ -1074,7 +1067,7 @@ ipcMain.handle('discover:start', async (_, options: { accountId?: string; cookie
   }
 
   return new Promise((resolve, reject) => {
-    const workerPath = path.join(__dirname, '../workers/discover.worker.cjs')
+    const workerPath = path.join(__dirname, '../workers/discover.worker.js')
 
     const workerPayload = {
       ...options,
@@ -1102,7 +1095,7 @@ ipcMain.handle('discover:start', async (_, options: { accountId?: string; cookie
 // My Videos handler
 ipcMain.handle('myvideos:start', async (_, options: { cookies: string; page: number }) => {
   return new Promise((resolve, reject) => {
-    const workerPath = path.join(__dirname, '../workers/myvideos.worker.cjs')
+    const workerPath = path.join(__dirname, '../workers/myvideos.worker.js')
 
     const worker = new Worker(workerPath, {
       workerData: { type: 'myvideos', payload: options }
@@ -1124,7 +1117,7 @@ ipcMain.handle('myvideos:start', async (_, options: { cookies: string; page: num
 
 ipcMain.handle('myvideos:delete', async (_, options: { cookies: string; videoId: string }) => {
   return new Promise((resolve, reject) => {
-    const workerPath = path.join(__dirname, '../workers/myvideos.worker.cjs')
+    const workerPath = path.join(__dirname, '../workers/myvideos.worker.js')
 
     const worker = new Worker(workerPath, {
       workerData: { type: 'myvideos-delete', payload: options }
@@ -1183,7 +1176,7 @@ let sessionWorker: Worker | null = null
 
 function getSessionWorker(): Worker {
   if (!sessionWorker) {
-    const workerPath = path.join(__dirname, '../workers/session.worker.cjs')
+    const workerPath = path.join(__dirname, '../workers/session.worker.js')
     sessionWorker = new Worker(workerPath, {
       workerData: { type: 'session' }
     })
@@ -1354,30 +1347,6 @@ let updaterState: UpdaterState = {
 }
 
 let downloadCancellation: (() => void) | null = null
-
-// Get app version from package.json (from app resources, not user data)
-async function getAppVersion(): Promise<string> {
-  try {
-    // Production: package.json is inside app.asar, use __nonWebpack_require__ to read it
-    // Development: package.json is in cwd
-    const isDev = process.env.NODE_ENV === 'development' || !process.env.NODE_ENV
-
-    if (isDev) {
-      const packageJsonPath = path.join(process.cwd(), 'package.json')
-      const data = await fs.readFile(packageJsonPath, 'utf-8')
-      const packageJson = JSON.parse(data)
-      return packageJson.version || '0.0.0'
-    } else {
-      // In production, package.json is inside app.asar at root level
-      // Use __nonWebpack_require__ which can read from asar archives
-      const packageJson = __nonWebpack_require__(path.join(process.resourcesPath, 'app.asar/package.json')) as { version?: string }
-      return packageJson.version || '0.0.0'
-    }
-  } catch (error) {
-    console.error('[Version] Failed to read version:', error)
-    return '0.0.0'
-  }
-}
 
 // Get update download directory
 function getUpdateDir(): string {
@@ -1623,7 +1592,9 @@ ipcMain.handle('updater:install-macos', async () => {
     // Remove backup if exists
     try {
       await fs.rm(backupDest, { recursive: true, force: true })
-    } catch {}
+    } catch {
+      console.warn('[UPDATER] Could not remove backup directory')
+    }
 
     // Backup current app
     try {
@@ -1651,7 +1622,9 @@ ipcMain.handle('updater:install-macos', async () => {
     // Remove backup
     try {
       await fs.rm(backupDest, { recursive: true, force: true })
-    } catch {}
+    } catch {
+      console.warn('[UPDATER] Could not remove backup directory after installation')
+    }
 
     console.log('[UPDATER] Installation complete, restarting...')
 
@@ -1703,6 +1676,52 @@ ipcMain.handle('updater:clear', async () => {
     const message = error instanceof Error ? error.message : 'Unknown error'
     return { success: false, error: message }
   }
+})
+
+// Updater: verify downloaded update checksum
+ipcMain.handle('updater:verify', async () => {
+  try {
+    const updateDir = getUpdateDir()
+    const updatePath = path.join(updateDir, 'update.zip')
+
+    // Check if update file exists
+    if (!existsSync(updatePath)) {
+      return { valid: false, error: 'Update file not found' }
+    }
+
+    // Read file and compute SHA-256 hash
+    const fileBuffer = await fs.readFile(updatePath)
+    const crypto = require('crypto')
+    const hash = crypto.createHash('sha256').update(fileBuffer).digest('hex')
+
+    // For now, just verify the file exists and has content
+    // In production, you would compare against a published checksum
+    const stats = await fs.stat(updatePath)
+    const isValid = stats.size > 0
+
+    console.log(`[UPDATER] Verification complete: ${isValid ? 'valid' : 'invalid'}, size: ${stats.size}, hash: ${hash.substring(0, 16)}...`)
+
+    return {
+      valid: isValid,
+      size: stats.size,
+      hash: hash,
+      error: isValid ? null : 'File is empty or corrupted'
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error'
+    console.error(`[UPDATER] Verification failed: ${message}`)
+    return { valid: false, error: message }
+  }
+})
+
+// Upload: stop active upload
+ipcMain.handle('upload:stop', async () => {
+  if (activeUploadWorker) {
+    activeUploadWorker.postMessage('terminate')
+    activeUploadWorker.terminate()
+    activeUploadWorker = null
+  }
+  return { success: true }
 })
 
 // i18n: read locale file

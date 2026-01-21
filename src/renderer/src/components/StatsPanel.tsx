@@ -1,5 +1,6 @@
 import type { GlobalStats, Account } from '../types'
 import { useLocaleStore } from '../i18n'
+import { CREDITS_EARNINGS_RATIO } from '../utils/constants'
 
 interface StatsPanelProps {
   stats: GlobalStats
@@ -9,14 +10,14 @@ interface StatsPanelProps {
 export function StatsPanel({ stats, accounts = [] }: StatsPanelProps) {
   const localeStore = useLocaleStore()
 
-  // Calculate earnings from credits (1000 points = 300 Kč)
+  // Calculate earnings from credits
   const calculateEarnings = () => {
     // Sum credits from all active accounts
     const totalCredits = accounts
       .filter(acc => acc.isActive)
       .reduce((sum, acc) => sum + (acc.credits || 0), 0)
     // 1000 credits = 300 Kč
-    return (totalCredits / 1000) * 300
+    return totalCredits * CREDITS_EARNINGS_RATIO
   }
 
   const earnings = calculateEarnings()

@@ -1,29 +1,11 @@
 import type { VideoCandidate } from '../types'
+import { formatFileSize, stripSizePrefix } from '../utils/format'
 
 interface VideoListItemProps {
   video: VideoCandidate
   processed?: boolean
   selected?: boolean
   onClick?: () => void
-}
-
-/**
- * Format size always in GB
- * Converts any size to GB format (e.g., "512 MB" -> "0.50 GB")
- */
-function formatSize(bytes?: number): string {
-  if (!bytes) return 'N/A'
-  const gbValue = bytes / (1024 * 1024 * 1024)
-  return `${parseFloat(gbValue.toFixed(2))} GB`
-}
-
-/**
- * Strip size prefix from title
- * Format: "[  2.62 GB  ] - Some Title" -> "Some Title"
- */
-function stripSizePrefix(title: string): string {
-  const sizePrefixPattern = /^\[\s*[\d.]+\s*(?:GB|MB|KB)\s*\]\s*-\s*/
-  return title.replace(sizePrefixPattern, '').trim()
 }
 
 export function VideoListItem({ video, processed, selected, onClick }: VideoListItemProps) {
@@ -41,7 +23,7 @@ export function VideoListItem({ video, processed, selected, onClick }: VideoList
     >
       {/* Size badge */}
       <span data-elname="size-badge" className="text-xs text-text-muted whitespace-nowrap min-w-[60px]">
-        {formatSize(video.size)}
+        {formatFileSize(video.size)}
       </span>
 
       {/* Title */}

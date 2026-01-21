@@ -1,15 +1,16 @@
 import { app, BrowserWindow, nativeTheme, ipcMain } from 'electron'
 import path from 'path'
 import { initAnalytics, trackAppLaunch, trackAppClose, flushAnalytics } from './analytics.js'
+import { WINDOW_WIDTH, WINDOW_HEIGHT, WINDOW_MIN_WIDTH, WINDOW_MIN_HEIGHT } from './constants.js'
 
 let mainWindow: BrowserWindow | null = null
 
 function createWindow() {
   mainWindow = new BrowserWindow({
-    width: 1400,
-    height: 900,
-    minWidth: 1200,
-    minHeight: 700,
+    width: WINDOW_WIDTH,
+    height: WINDOW_HEIGHT,
+    minWidth: WINDOW_MIN_WIDTH,
+    minHeight: WINDOW_MIN_HEIGHT,
     webPreferences: {
       preload: path.join(__dirname, '../preload/index.cjs'),
       nodeIntegration: false,

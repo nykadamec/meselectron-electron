@@ -49,6 +49,21 @@
 
 ---
 
+## 🚧 Features - Work in Progress
+
+### Completed ✓
+- [x] Auto-Skip Processed Videos
+- [x] Fixed 401 Error (HTML entity decoding)
+
+### In Progress 🔄
+- [ ] **Parallel Downloading + Uploading** - Simultaneously download and upload videos
+- [ ] **Process Tab Redesign** - Completely redesigned workflow and UX
+- [ ] **Settings Tab Redesign** - Better organization and fixes
+- [ ] **User Statistics** - Track history, data usage, and activity
+- [ ] **Edit Videos from App** - Modify names and descriptions directly
+
+---
+
 ## 📖 Project Overview
 
 **Prehrajto.cz AutoPilot** is a sophisticated desktop application designed to streamline video management for the **Prehrajto.cz** platform. Built on the modern **Electron + React** stack, it offers a robust, cross-platform solution for high-performance video discovery, automated downloading, professional watermarking, and seamless uploading.

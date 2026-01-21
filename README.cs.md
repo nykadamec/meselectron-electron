@@ -49,6 +49,21 @@
 
 ---
 
+## 🚧 Funkce - Rozpracované
+
+### Dokončeno ✓
+- [x] Automatické přeskočení zpracovaných videí
+- [x] Oprava chyby 401 (dekódování HTML entit)
+
+### Rozpracované 🔄
+- [ ] **Paralelní stahování + nahrávání** - Souběžné stahování a nahrávání videí
+- [ ] **Přemístění záložky Zpracování** - Kompletně přepracovaný workflow a UX
+- [ ] **Přemístění záložky Nastavení** - Lepší organizace a opravy
+- [ ] **Uživatelské statistiky** - Sledování historie, využití dat a aktivity
+- [ ] **Úprava videí z aplikace** - Měňte názvy a popisy přímo v aplikaci
+
+---
+
 ## 📖 O projektu
 
 **Prehrajto.cz AutoPilot** je sofistikovaná desktopová aplikace navržená pro zjednodušení správy videí pro platformu **Prehrajto.cz**. Postavena na moderním **Electron + React** stacku, nabízí robustní, multiplatformní řešení pro vysoce výkonné objevování videí, automatizované stahování, profesionální vodoznaky a bezproblémové nahrávání.
@@ -176,6 +191,19 @@ Výstupy budou dostupné v adresáři `release/`.
 ## 📄 Licence
 
 Tento projekt je licencován pod **ISC License**. Více informací naleznete v souboru [LICENSE](LICENSE).
+
+---
+
+## 📋 Seznam změn
+
+### [v0.1.4] - 2026-01-21
+
+#### ✨ Nové funkce
+- **Automatické přeskočení zpracovaných videí**: Discovery nyní automaticky přeskakuje již zpracovaná videa a pokračuje na další stránky
+- **Zjednodušené UI**: Sekce "Již zpracovaná" byla odstraněna - zpracovaná videa se nyní filtrují během discovery
+
+#### 🐛 Opravy chyb
+- **Oprava chyby 401**: Vyřešeny selhání stahování videí způsobené nesprávně dekódovanými URL (HTML entity jako `&amp;` jsou nyní správně převedeny na `&`)
 
 ---
 

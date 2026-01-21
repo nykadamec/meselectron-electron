@@ -49,7 +49,8 @@
 
 ---
 
-## 🚧 Funkce - Rozpracované
+<details>
+<summary><strong>🚧 Funkce - Rozpracované</strong> (kliknutím rozbalíte)</summary>
 
 ### Dokončeno ✓
 - [x] Automatické přeskočení zpracovaných videí
@@ -61,6 +62,8 @@
 - [ ] **Přemístění záložky Nastavení** - Lepší organizace a opravy
 - [ ] **Uživatelské statistiky** - Sledování historie, využití dat a aktivity
 - [ ] **Úprava videí z aplikace** - Měňte názvy a popisy přímo v aplikaci
+
+</details>
 
 ---
 

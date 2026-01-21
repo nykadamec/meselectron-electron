@@ -49,7 +49,8 @@
 
 ---
 
-## 🚧 Features - Work in Progress
+<details>
+<summary><strong>🚧 Features - Work in Progress</strong> (click to expand)</summary>
 
 ### Completed ✓
 - [x] Auto-Skip Processed Videos
@@ -61,6 +62,8 @@
 - [ ] **Settings Tab Redesign** - Better organization and fixes
 - [ ] **User Statistics** - Track history, data usage, and activity
 - [ ] **Edit Videos from App** - Modify names and descriptions directly
+
+</details>
 
 ---
 

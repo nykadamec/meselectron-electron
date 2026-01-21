@@ -61,7 +61,8 @@ ipcMain.handle('settings:read', async () => {
       videoCount: 20,
       nospeed: false,
       addWatermark: true,
-      outputDir: defaultDir
+      outputDir: defaultDir,
+      hqProcessing: true
     } as Settings
   }
 })
@@ -650,12 +651,35 @@ ipcMain.handle('platform:info', () => {
 })
 
 // Download handler using worker
-ipcMain.handle('download:start', async (_, options: { url: string; outputPath?: string; cookies?: string; videoId?: string; maxConcurrent?: number; addWatermark?: boolean; ffmpegPath?: string; hqProcessing?: boolean }) => {
+ipcMain.handle('download:start', async (_, options: { url: string; outputPath?: string; cookies?: string; videoId?: string; videoTitle?: string; maxConcurrent?: number; addWatermark?: boolean; ffmpegPath?: string; hqProcessing?: boolean }) => {
   return new Promise((resolve, reject) => {
     const workerPath = path.join(__dirname, '../workers/download.worker.cjs')
 
     // Generate outputPath if not provided
-    const outputPath = options.outputPath || path.join(getProjectRoot(), 'VIDEOS', `video_${Date.now()}.mp4`)
+    // Use videoTitle if available, sanitized for filesystem
+    const generateFileName = (): string => {
+      if (options.videoTitle) {
+        // Remove size prefix like "[5.09 GB] - " (with spaces) or "[_5.09_GB_]_-_"
+        // First, normalize underscores to spaces for consistent parsing
+        let normalized = options.videoTitle.replace(/_/g, ' ')
+        // Remove the size prefix pattern
+        const sizePrefixPattern = /^\[\s*[\d.,]+\s*(GB|MB)\s*\]\s*-\s*/i
+        let cleanTitle = normalized.replace(sizePrefixPattern, '')
+        // Sanitize filename: remove invalid characters, convert spaces to underscores
+        const sanitized = cleanTitle
+          .replace(/[<>:"/\\|?*\x00-\x1f]/g, '')
+          .replace(/\s+/g, '_')
+          .trim()
+          .slice(0, 100)
+        if (sanitized.length > 0) {
+          return `${sanitized}.mp4`
+        }
+      }
+      // Fallback to timestamp-based name
+      return `video_${Date.now()}.mp4`
+    }
+
+    const outputPath = options.outputPath || path.join(getProjectRoot(), 'VIDEOS', generateFileName())
 
     // Get ffmpeg path if not provided
     const ffmpegPath = options.ffmpegPath || (() => {
@@ -687,7 +711,7 @@ ipcMain.handle('download:start', async (_, options: { url: string; outputPath?: 
       outputPath,
       ffmpegPath,
       downloadMode,
-      hqProcessing
+      hqProcessing: options.hqProcessing ?? hqProcessing
     }
 
     const worker = new Worker(workerPath, {
@@ -705,8 +729,9 @@ ipcMain.handle('download:start', async (_, options: { url: string; outputPath?: 
 
         // For download:extract-metadata, use axios directly
         if (channel === 'download:extract-metadata') {
-          const { url, cookies } = args
+          const { url, cookies, hqProcessing } = args
           console.log('[IPC] [DEBUG] Extracting metadata for:', url)
+          console.log('[IPC] [DEBUG] HQ processing:', hqProcessing)
           console.log('[IPC] [DEBUG] Cookies present:', !!cookies, '| Length:', cookies?.length || 0)
 
           // Step 1: Get video PAGE to extract size (without ?do=download)
@@ -721,12 +746,55 @@ ipcMain.handle('download:start', async (_, options: { url: string; outputPath?: 
               'Cookie': cookies || ''
             },
             timeout: 15000
-          }).then(response => {
+          }).then(async response => {
             console.log('[IPC] [DEBUG] Video page response status:', response.status)
 
             const html = response.data
             console.log('[IPC] [DEBUG] HTML length:', html.length)
             console.log('[IPC] [DEBUG] Fetched from:', videoPageUrl)
+
+            // Extract MP4 URL based on hqProcessing mode
+            let mp4Url: string | null = null
+
+            if (hqProcessing !== false) {
+              // HQ mode: use ?do=download URL (will be redirected to actual video)
+              console.log('[IPC] [DEBUG] HQ mode - using ?do=download URL')
+              mp4Url = `${url}${url.includes('?') ? '&' : '?'}do=download`
+            } else {
+              // LQ mode: extract mp4 URLs from JavaScript in HTML
+              console.log('[IPC] [DEBUG] LQ mode - extracting from JavaScript')
+
+              // Find all mp4 URLs in the page - more permissive pattern
+              const jsUrlMatches = html.match(/https?:[^"'\s<>\\]+mp4[^"'\s<>\\]*/gi) || []
+              console.log('[IPC] [DEBUG] Raw JS URL matches:', jsUrlMatches.length)
+              console.log('[IPC] [DEBUG] Raw URLs:', jsUrlMatches)
+
+              // Filter for CDN URLs that look like video files
+              // Accept: premiumcdn.net, and any pf-storage* domains
+              // NOTE: Don't decode URL - the signature uses encoded params!
+              const videoUrls = jsUrlMatches.filter((url: string) =>
+                (url.includes('premiumcdn.net') ||
+                 url.includes('.cdn.') ||
+                 url.includes('/stream') ||
+                 url.includes('pf-storage')) &&
+                url.includes('mp4')
+              )
+
+              console.log('[IPC] [DEBUG] Filtered video URLs:', videoUrls)
+
+              // Remove duplicates
+              const uniqueVideoUrls = [...new Set(videoUrls)]
+              console.log('[IPC] [DEBUG] Unique video URLs:', uniqueVideoUrls.length)
+              if (uniqueVideoUrls.length > 0 && uniqueVideoUrls[0]) {
+                console.log('[IPC] [DEBUG] First video URL:', (uniqueVideoUrls[0] as string).substring(0, 100))
+              }
+
+              // Use the first (usually highest quality - pf-storage1 is typically 1080p)
+              if (uniqueVideoUrls.length > 0) {
+                mp4Url = uniqueVideoUrls[0] as string
+                console.log('[IPC] [DEBUG] Selected mp4Url:', mp4Url?.substring(0, 100))
+              }
+            }
 
             // DEBUG: Show HTML sample to find size element structure
             const htmlSample = html.substring(0, 1500).replace(/\s+/g, ' ')
@@ -770,14 +838,19 @@ ipcMain.handle('download:start', async (_, options: { url: string; outputPath?: 
               }
             }
 
-            // Step 2: Return download URL with ?do=download
-            const downloadUrl = `${url}${url.includes('?') ? '&' : '?'}do=download`
-            console.log('[IPC] [DEBUG] Download URL:', downloadUrl)
+            // Check if we got mp4Url
+            if (!mp4Url) {
+              console.log('[IPC] [DEBUG] ⚠️ No mp4Url found - checking for ?do=download fallback')
+              // Fallback: use ?do=download URL if extraction failed
+              mp4Url = `${url}${url.includes('?') ? '&' : '?'}do=download`
+            }
+
+            console.log('[IPC] [DEBUG] Final mp4Url:', mp4Url?.substring(0, 100))
 
             // Step 3: If no size from HTML, try GET with Range header
             if (fileSize === 0) {
               console.log('[IPC] [DEBUG] Trying GET with Range for size...')
-              return axios.get(downloadUrl, {
+              return axios.get(mp4Url!, {
                 headers: {
                   'Range': 'bytes=0-1',
                   'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
@@ -805,14 +878,14 @@ ipcMain.handle('download:start', async (_, options: { url: string; outputPath?: 
                   console.log('[IPC] [DEBUG] ✅ Size from Content-Length:', fileSize, 'bytes')
                 }
 
-                worker.postMessage({ type: 'ipc:result', callbackId, result: { mp4Url: downloadUrl, fileSize } })
+                worker.postMessage({ type: 'ipc:result', callbackId, result: { mp4Url, fileSize } })
               }).catch(err => {
                 console.log('[IPC] [DEBUG] Range request failed:', err.code || err.message)
                 // Fallback: return without size
-                worker.postMessage({ type: 'ipc:result', callbackId, result: { mp4Url: downloadUrl, fileSize: 0 } })
+                worker.postMessage({ type: 'ipc:result', callbackId, result: { mp4Url, fileSize: 0 } })
               })
             } else {
-              worker.postMessage({ type: 'ipc:result', callbackId, result: { mp4Url: downloadUrl, fileSize } })
+              worker.postMessage({ type: 'ipc:result', callbackId, result: { mp4Url, fileSize } })
             }
           }).catch(err => {
             console.log('[IPC] [DEBUG] Request failed:', err.code, '-', err.message)
@@ -857,7 +930,7 @@ ipcMain.handle('download:start', async (_, options: { url: string; outputPath?: 
 
 // Extract video metadata (called from worker to avoid thread network issues)
 ipcMain.handle('download:extract-metadata', async (_, { url, cookies, hqProcessing }) => {
-  console.log('[IPC] Extracting metadata from:', url.substring(0, 60), '| HQ:', hqProcessing)
+  console.log('[IPC] Extracting metadata from:', url.substring(0, 60), '| HQ:', hqProcessing, '| type:', typeof hqProcessing)
 
   try {
     // HQ Processing (default): use ?do=download URL
@@ -865,6 +938,8 @@ ipcMain.handle('download:extract-metadata', async (_, { url, cookies, hqProcessi
     const fetchUrl = hqProcessing !== false
       ? (url.includes('?') ? `${url}&do=download` : `${url}?do=download`)
       : url
+
+    console.log('[IPC] Fetch URL:', fetchUrl)
 
     const response = await axios.get(fetchUrl, {
       headers: {
@@ -877,13 +952,34 @@ ipcMain.handle('download:extract-metadata', async (_, { url, cookies, hqProcessi
     const html = response.data
     console.log('[IPC] Got HTML, length:', html.length)
 
-    const contentUrlMatch = html.match(/<meta\s+itemprop="contentUrl"\s+content="([^"]+)"/)
-    if (!contentUrlMatch) {
+    let mp4Url: string | null = null
+
+    if (hqProcessing !== false) {
+      // HQ Processing: use ?do=download URL, look for meta contentUrl
+      const contentUrlMatch = html.match(/<meta\s+itemprop="contentUrl"\s+content="([^"]+)"/)
+      if (contentUrlMatch) {
+        mp4Url = decodeURIComponent(contentUrlMatch[1])
+      }
+    } else {
+      // LQ Processing: look for <video src="..."> or <source src="...">
+      console.log('[IPC] [DEBUG] LQ mode - looking for <video> or <source> elements')
+
+      const videoSrcMatch = html.match(/<video[^>]*\ssrc="([^"]+)"/i) ||
+                            html.match(/<source[^>]*\ssrc="([^"]+)"[^>]*>/i)
+
+      console.log('[IPC] [DEBUG] videoSrcMatch:', videoSrcMatch ? videoSrcMatch[0].substring(0, 150) : 'null')
+
+      if (videoSrcMatch) {
+        mp4Url = decodeURIComponent(videoSrcMatch[1])
+        console.log('[IPC] [DEBUG] Extracted mp4Url:', mp4Url.substring(0, 100))
+      }
+    }
+
+    if (!mp4Url) {
       throw new Error('Nepodařilo se najít video URL na stránce')
     }
 
-    const mp4Url = decodeURIComponent(contentUrlMatch[1])
-    console.log('[IPC] Found MP4 URL')
+    console.log('[IPC] Found MP4 URL:', mp4Url.substring(0, 100))
 
     // HEAD request pro velikost
     const headResponse = await axios.head(mp4Url, {
@@ -1188,13 +1284,20 @@ ipcMain.handle('session:save-credentials', async (_, email: string, password: st
   }
 })
 
-// Download stop handler - terminates active download worker
+// Download stop handler - terminates active download worker gracefully
 ipcMain.on('download:stop', () => {
   if (activeDownloadWorker) {
-    console.log('[IPC] Terminating active download worker...')
-    activeDownloadWorker.terminate()
-    activeDownloadWorker = null
-    console.log('[IPC] Download worker terminated')
+    console.log('[IPC] Sending termination signal to download worker...')
+    // Post termination message first - gives worker chance to cleanup child processes
+    activeDownloadWorker.postMessage('terminate')
+    // Give worker time to cleanup, then force terminate if needed
+    setTimeout(() => {
+      if (activeDownloadWorker) {
+        console.log('[IPC] Force terminating worker...')
+        activeDownloadWorker.terminate()
+        activeDownloadWorker = null
+      }
+    }, 1000)
   } else {
     console.log('[IPC] No active download worker to terminate')
   }

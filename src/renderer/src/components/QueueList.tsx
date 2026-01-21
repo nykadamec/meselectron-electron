@@ -17,6 +17,7 @@ import {
   verticalListSortingStrategy
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
+import { Trash2 } from 'lucide-react'
 import type { QueueItem } from '../types'
 import { useLocaleStore } from '../i18n'
 
@@ -54,6 +55,16 @@ const formatETA = (seconds?: number) => {
   const mins = Math.floor(seconds / 60)
   const secs = Math.floor(seconds % 60)
   return `${mins}m ${secs}s`
+}
+
+/**
+ * Strip size prefix from title
+ * Format: "[  2.62 GB  ] - Some Title" -> "Some Title"
+ */
+const stripSizePrefix = (title: string): string => {
+  // Pattern: [  XX.XX GB  ] - or [  XX.XX MB  ] - or [  X.XX GB  ] -
+  const sizePrefixPattern = /^\[\s*[\d.]+\s*(GB|MB|KB)\s*\]\s*-\s*/
+  return title.replace(sizePrefixPattern, '').trim()
 }
 
 // Sortable Queue Item Component
@@ -220,7 +231,7 @@ function SortableQueueItem({
               overflow: 'hidden',
               textOverflow: 'ellipsis'
             }}>
-              {item.video.title}
+              {stripSizePrefix(item.video.title)}
             </span>
           </div>
 
@@ -330,10 +341,10 @@ function SortableQueueItem({
             #{item.priority}
           </span>
 
-          {/* Remove button (only for non-active pending/failed items) */}
+          {/* Delete button (for all non-active items) */}
           {onRemove && item.status !== 'active' && (
             <button
-              data-elname="remove-button"
+              data-elname="delete-button"
               onClick={() => onRemove(item.id)}
               style={{
                 padding: 4,
@@ -355,11 +366,9 @@ function SortableQueueItem({
                 e.currentTarget.style.color = 'var(--color-text-muted)'
                 e.currentTarget.style.backgroundColor = 'transparent'
               }}
-              title={t('queue.remove')}
+              title={item.status === 'completed' ? t('queue.delete') : t('queue.remove')}
             >
-              <svg style={{ width: 14, height: 14 }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
+              <Trash2 style={{ width: 14, height: 14 }} />
             </button>
           )}
         </div>

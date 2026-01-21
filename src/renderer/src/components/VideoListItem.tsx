@@ -7,12 +7,23 @@ interface VideoListItemProps {
   onClick?: () => void
 }
 
+/**
+ * Format size always in GB
+ * Converts any size to GB format (e.g., "512 MB" -> "0.50 GB")
+ */
 function formatSize(bytes?: number): string {
   if (!bytes) return 'N/A'
-  const k = 1024
-  const sizes = ['B', 'KB', 'MB', 'GB']
-  const i = Math.floor(Math.log(bytes) / Math.log(k))
-  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`
+  const gbValue = bytes / (1024 * 1024 * 1024)
+  return `${parseFloat(gbValue.toFixed(2))} GB`
+}
+
+/**
+ * Strip size prefix from title
+ * Format: "[  2.62 GB  ] - Some Title" -> "Some Title"
+ */
+function stripSizePrefix(title: string): string {
+  const sizePrefixPattern = /^\[\s*[\d.]+\s*(?:GB|MB|KB)\s*\]\s*-\s*/
+  return title.replace(sizePrefixPattern, '').trim()
 }
 
 export function VideoListItem({ video, processed, selected, onClick }: VideoListItemProps) {
@@ -35,7 +46,7 @@ export function VideoListItem({ video, processed, selected, onClick }: VideoList
 
       {/* Title */}
       <span data-elname="video-title" className="flex-1 truncate font-medium text-sm">
-        {video.title}
+        {stripSizePrefix(video.title)}
       </span>
 
       {/* Status indicator */}

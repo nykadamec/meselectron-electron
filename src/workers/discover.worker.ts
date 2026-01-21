@@ -14,6 +14,7 @@ interface VideoCandidate {
   title: string
   duration?: string
   thumbnail?: string
+  size?: number  // Velikost v bytes
 }
 
 interface DiscoverOptions {
@@ -92,8 +93,34 @@ function formatSize(size: string): string {
 }
 
 /**
+ * Convert size string to bytes
+ * Examples: "2.76 GB" → 2963527372, "1.37 GB" → 1471274905
+ */
+function parseSizeToBytes(size: string): number | undefined {
+  if (!size) return undefined
+
+  const match = size.match(/^([\d.]+)\s*([GMK]B)$/i)
+  if (!match) return undefined
+
+  const value = parseFloat(match[1])
+  const unit = match[2].toUpperCase()
+
+  switch (unit) {
+    case 'GB':
+      return Math.round(value * 1024 * 1024 * 1024)
+    case 'MB':
+      return Math.round(value * 1024 * 1024)
+    case 'KB':
+      return Math.round(value * 1024)
+    default:
+      return undefined
+  }
+}
+
+/**
  * Extract video links from a prehrajto.cz listing page
- * Matches Python implementation in download.py:extract_video_links()
+ * NEW APPROACH: Parse each video-wrapper section independently
+ * This ensures href and size are extracted from the same context
  */
 async function extractVideoLinksFromPage(url: string, cookies: string): Promise<VideoCandidate[]> {
   try {
@@ -123,7 +150,6 @@ async function extractVideoLinksFromPage(url: string, cookies: string): Promise<
     console.log(`[DEBUG] HTML sample: ${html.substring(0, 800)}`)
 
     // Check if we got a login page or error page
-    // Only treat as login page if we're actually on /prihlaseni or similar, not just because "přihlásit" appears in nav
     if (response.status !== 200) {
       console.error(`[DEBUG] Got error status: ${response.status}`)
       return []
@@ -136,51 +162,68 @@ async function extractVideoLinksFromPage(url: string, cookies: string): Promise<
       return []
     }
 
-    // Video links pattern: href="/video-title/ID" (format: /slug/hex-id)
-    const linkPattern = /href="\/([^\/]+)\/([a-f0-9]+)"[^>]*>/gi
+    // NEW APPROACH: Parse video-wrapper sections first, then extract from each section
+    // This ensures href and size are always from the same video card
+    const videoWrapperPattern = /<div[^>]*class="[^"]*video-wrapper[^"]*"[^>]*>([\s\S]*?)<\/div>\s*<\/a>/gi
+    const linkPattern = /href="\/([^\/]+)\/([a-f0-9]+)"[^>]*>/i
+    const sizePattern = /<div[^>]*class="video__tag video__tag--size"[^>]*>([^<]+)<\/div>/i
+    const thumbPattern = /src="([^"]*thumb\.prehrajto\.cz[^"]*)"/i
 
     let match
     const linksFound = new Map<string, VideoCandidate>()
+    let wrapperCount = 0
 
-    while ((match = linkPattern.exec(html)) !== null) {
-      const title = match[1]  // video title/slug
-      const videoId = match[2]  // hex ID
+    while ((match = videoWrapperPattern.exec(html)) !== null) {
+      wrapperCount++
+      const sectionHtml = match[1]  // Content inside video-wrapper
+
+      // Extract href from this section
+      const hrefMatch = sectionHtml.match(linkPattern)
+      if (!hrefMatch) continue
+
+      const title = hrefMatch[1]
+      const videoId = hrefMatch[2]
       const href = `/${title}/${videoId}`
 
-      // Skip if already found or if it looks like a different type of link
-      if (linksFound.has(href)) continue
+      // Skip non-video links
       if (title === 'video' || title === 'profil' || title === 'genre' || title === 'category') continue
+      if (linksFound.has(href)) continue
 
-      // Get the surrounding context for thumbnail
-      const startIdx = Math.max(0, match.index - 1500)
-      const endIdx = Math.min(html.length, match.index + 1500)
-      const context = html.substring(startIdx, endIdx)
+      // Extract size from this section (NOW GUARANTEED to be from same wrapper!)
+      const sizeMatch = sectionHtml.match(sizePattern)
+      const size = sizeMatch ? sizeMatch[1].trim() : null  // "2.4 GB" or null
 
-      // Extract thumbnail - look for thumb.prehrajto.cz
-      const thumbMatch = context.match(/src="([^"]*thumb\.prehrajto\.cz[^"]*)"/i)
+      // Extract thumbnail
+      const thumbMatch = sectionHtml.match(thumbPattern)
       const thumbnail = thumbMatch ? thumbMatch[1] : undefined
-
-      // Extract size from context
-      let size = parseSizeFromContext(context)
 
       // Build full URL
       const fullUrl = `https://prehrajto.cz${href}`
 
-      // Clean up title (replace hyphens with spaces, capitalize)
+      // Clean up title
       const cleanTitle = title.replace(/-/g, ' ').replace(/\s+/g, ' ').trim()
       const formattedTitle = cleanTitle.charAt(0).toUpperCase() + cleanTitle.slice(1)
 
       // Format title with size prefix
       const titleWithSize = size ? `[${formatSize(size)}] - ${formattedTitle}` : formattedTitle
 
+      // Convert size string to bytes
+      const sizeBytes = size ? parseSizeToBytes(size) : undefined
+
+      // Debug: log what we found
+      if (size) {
+        console.log(`[DEBUG] Found video: "${formattedTitle}" size="${size}" bytes=${sizeBytes}`)
+      }
+
       linksFound.set(href, {
         url: fullUrl,
         title: titleWithSize,
-        thumbnail: thumbnail?.startsWith('//') ? `https:${thumbnail}` : thumbnail
+        thumbnail: thumbnail?.startsWith('//') ? `https:${thumbnail}` : thumbnail,
+        size: sizeBytes
       })
     }
 
-    console.log(`[DEBUG] Found ${linksFound.size} video links`)
+    console.log(`[DEBUG] Found ${linksFound.size} video links from ${wrapperCount} video-wrapper sections`)
     return Array.from(linksFound.values())
 
   } catch (error) {
@@ -219,9 +262,10 @@ async function discoverVideos(options: DiscoverOptions) {
 
   // Page URLs to scrape - same as Python implementation
   const pageConfigs = [
+    { baseUrl: 'https://prehrajto.cz/nejsledovanejsi-online-videa', name: 'všechny' },
     { baseUrl: 'https://prehrajto.cz/nejsledovanejsi-online-videa?filteredPastTime=7days', name: '7 dní' },
-    { baseUrl: 'https://prehrajto.cz/nejsledovanejsi-online-videa?filteredPastTime=14days', name: '14 dní' },
-    { baseUrl: 'https://prehrajto.cz/nejsledovanejsi-online-videa', name: 'všechny' }
+    { baseUrl: 'https://prehrajto.cz/nejsledovanejsi-online-videa?filteredPastTime=14days', name: '14 dní' }
+   
   ]
 
   let totalScanned = 0

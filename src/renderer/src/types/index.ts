@@ -47,6 +47,7 @@ export interface VideoCandidate {
   title: string
   duration?: string
   thumbnail?: string
+  size?: number  // Velikost v bytes
 }
 
 // Discovery state
@@ -72,6 +73,7 @@ export interface Video {
   eta?: number
   accountId?: string
   error?: string
+  path?: string  // Lokální cesta k staženému souboru
 }
 
 export type VideoStatus =

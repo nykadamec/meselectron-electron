@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useAppStore } from '../store'
 import { VideoListItem } from './VideoListItem'
 
@@ -20,6 +20,9 @@ export function VideoList() {
   // Separate processed vs available videos
   const processedVideos = videoCandidates.filter(c => processedVideoUrls.has(c.url))
   const availableVideos = videoCandidates.filter(c => !processedVideoUrls.has(c.url))
+
+  // Collapsible state for processed section
+  const [isProcessedCollapsed, setIsProcessedCollapsed] = useState(false)
 
   // Auto-trigger discover when tab is opened and no candidates
   useEffect(() => {
@@ -196,10 +199,22 @@ export function VideoList() {
         {/* Processed videos section */}
         {processedVideos.length > 0 && (
           <>
-            <h3 data-elname="section-title" className="text-sm text-text-muted uppercase tracking-wider mt-4 mb-2 sticky top-0 bg-bg-main py-1">
+            <h3
+              data-elname="processed-section-title"
+              className="flex items-center gap-2 text-sm text-text-muted uppercase tracking-wider mt-4 mb-2 cursor-pointer hover:text-text-primary sticky top-0 bg-bg-main py-1"
+              onClick={() => setIsProcessedCollapsed(!isProcessedCollapsed)}
+            >
+              <svg
+                className={`w-4 h-4 transition-transform ${isProcessedCollapsed ? '-rotate-90' : ''}`}
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
               Již zpracovaná ({processedVideos.length})
             </h3>
-            {processedVideos.map(video => (
+            {!isProcessedCollapsed && processedVideos.map(video => (
               <VideoListItem
                 key={video.url}
                 video={video}

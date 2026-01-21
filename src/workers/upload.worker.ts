@@ -140,7 +140,9 @@ function buildMultipartForm(
 async function getUploadParameters(session: AxiosInstance, filePath: string): Promise<UploadParams | null> {
   try {
     const fileSize = fs.statSync(filePath).size
-    const fileName = path.basename(filePath).replace(/\.(avi|mp4|mkv)$/i, '')
+    // Extract filename without extension, convert underscores to spaces for upload
+    const rawFileName = path.basename(filePath).replace(/\.(avi|mp4|mkv)$/i, '')
+    const fileName = rawFileName.replace(/_/g, ' ')
 
     console.log(`[UPLOAD] getUploadParameters: fileSize=${fileSize}, fileName=${fileName}`)
 
@@ -336,8 +338,17 @@ async function uploadToCDN(
     })
 
     // Resume stream after drain - this is the key backpressure mechanism
+    let drainCount = 0
+    let lastDrainLog = 0
+
     req.on('drain', () => {
-      console.log('[UPLOAD] Drain event - resuming stream')
+      drainCount++
+      const now = Date.now()
+      // Log only every 5 seconds to avoid spam
+      if (now - lastDrainLog > 5000) {
+        console.log(`[UPLOAD] Drain event - resuming stream (${drainCount}x total)`)
+        lastDrainLog = now
+      }
       fileStream.resume()
     })
 
@@ -437,6 +448,15 @@ async function uploadVideo(options: UploadOptions) {
     }
 
     console.log('[UPLOAD] Sending complete with videoId:', videoId)
+
+    // Delete the source file after successful upload
+    try {
+      await fs.promises.unlink(filePath)
+      console.log('[UPLOAD] File deleted:', filePath)
+    } catch (err) {
+      console.error('[UPLOAD] Failed to delete file:', err)
+    }
+
     postMessage({ type: 'status', status: 'completed', videoId })
     postMessage({ type: 'complete', success: true, videoId })
 

@@ -1,10 +1,36 @@
 // Download worker - handles video downloads from prehrajto.cz with progress reporting
 import { parentPort, workerData } from 'worker_threads'
-import { spawn } from 'child_process'
+import { spawn, ChildProcess } from 'child_process'
 import axios from 'axios'
 import fs from 'fs'
 import fsp from 'fs/promises'
 import path from 'path'
+
+// Track spawned processes for cleanup on cancellation
+const activeProcesses: ChildProcess[] = []
+
+// Cleanup function to kill all active processes
+function cleanupProcesses() {
+  console.log('[Download] Cleaning up', activeProcesses.length, 'active processes...')
+  for (const proc of activeProcesses) {
+    if (!proc.killed) {
+      console.log('[Download] Killing process PID:', proc.pid)
+      proc.kill('SIGTERM')
+    }
+  }
+  activeProcesses.length = 0
+}
+
+// Listen for termination signal from main process
+if (parentPort) {
+  parentPort.on('message', (message: unknown) => {
+    if (message === 'terminate' || (message as { type?: string })?.type === 'terminate') {
+      console.log('[Download] Received termination signal, cleaning up...')
+      cleanupProcesses()
+      process.exit(0)
+    }
+  })
+}
 
 // Helper to safely post messages (parentPort is always available in worker threads)
 function sendProgress(data: unknown) {
@@ -108,12 +134,21 @@ async function extractVideoMetadata(url, cookies) {
     }
 
     console.log('[Download] [', videoId.substring(0, 8), '] Metadata extraction successful')
+    console.log('[Download] [', videoId.substring(0, 8), '] File size:', fileSize > 0 ? fileSizeMB.toFixed(1) + ' MB' : 'unknown')
 
-    // Return with URL as title (extracted from URL path)
+    // Extract title from URL path
     const urlParts = url.split('/')
     const title = urlParts[urlParts.length - 2] || 'video'
 
-    return { mp4Url, fileSize, title, thumbnail: undefined }
+    // Update video size in UI (correct size from video page, not from listing page)
+    sendProgress({
+      type: 'progress',
+      status: 'extracting',
+      videoId,
+      size: fileSize
+    })
+
+    return { mp4Url, fileSize, title, thumbnail: undefined, originalUrl: url }
 
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error)
@@ -125,8 +160,8 @@ async function extractVideoMetadata(url, cookies) {
 /**
  * Download video using parallel connections
  */
-async function downloadVideo(metadata: { mp4Url: string; fileSize: number; title?: string }, outputPath: string, cookies: string) {
-  const { mp4Url, fileSize } = metadata
+async function downloadVideo(metadata: { mp4Url: string; fileSize: number; title?: string; originalUrl?: string }, outputPath: string, cookies: string) {
+  const { mp4Url, fileSize, originalUrl } = metadata
   const startTime = Date.now()
   let downloadedBytes = 0
 
@@ -154,11 +189,25 @@ async function downloadVideo(metadata: { mp4Url: string; fileSize: number; title
   // Use curl or wget if selected
   if (downloadMode === 'curl') {
     await fileHandle.close()
-    return downloadWithCurl(mp4Url, outputPath, cookies, fileSize)
+    try {
+      return await downloadWithCurl(mp4Url, outputPath, cookies, fileSize)
+    } catch (err) {
+      // If curl fails with CDN URL, fallback to HQ mode (?do=download)
+      console.log('[Download] [', workerData.payload.videoId.substring(0, 8), '] Curl failed, falling back to HQ mode')
+      const hqUrl = originalUrl ? `${originalUrl}${originalUrl.includes('?') ? '&' : '?'}do=download` : mp4Url
+      return downloadWithCurl(hqUrl, outputPath, cookies, fileSize)
+    }
   }
   if (downloadMode === 'wget') {
     await fileHandle.close()
-    return downloadWithWget(mp4Url, outputPath, cookies, fileSize)
+    try {
+      return await downloadWithWget(mp4Url, outputPath, cookies, fileSize)
+    } catch (err) {
+      // If wget fails with CDN URL, fallback to HQ mode (?do=download)
+      console.log('[Download] [', workerData.payload.videoId.substring(0, 8), '] Wget failed, falling back to HQ mode')
+      const hqUrl = originalUrl ? `${originalUrl}${originalUrl.includes('?') ? '&' : '?'}do=download` : mp4Url
+      return downloadWithWget(hqUrl, outputPath, cookies, fileSize)
+    }
   }
 
   // Calculate number of chunks
@@ -370,31 +419,70 @@ async function downloadStreaming(mp4Url: string, outputPath: string, cookies: st
  * Download video using curl
  */
 async function downloadWithCurl(mp4Url: string, outputPath: string, cookies: string, fileSize: number): Promise<number> {
-  return new Promise((resolve, reject) => {
+  return new Promise(async (resolve, reject) => {
     const startTime = Date.now()
     let downloadedBytes = 0
 
     console.log('[Download] [', workerData.payload.videoId.substring(0, 8), '] Downloading with curl:', mp4Url)
+
+    // First, get the actual file size from CDN using HEAD request
+    try {
+      const headResponse = await axios.head(mp4Url, {
+        headers: {
+          'Cookie': cookies || '',
+          'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
+        },
+        timeout: 30000
+      })
+
+      const actualSize = parseInt(headResponse.headers['content-length'] || '0', 10)
+      if (actualSize > 0) {
+        console.log('[Download] [', workerData.payload.videoId.substring(0, 8), '] CDN Content-Length:', actualSize, 'bytes')
+        fileSize = actualSize
+
+        // Update UI with correct file size
+        sendProgress({
+          type: 'progress',
+          progress: 0,
+          downloaded: 0,
+          total: actualSize,
+          size: actualSize,
+          videoId: workerData.payload.videoId
+        })
+      }
+    } catch (headErr) {
+      console.log('[Download] [', workerData.payload.videoId.substring(0, 8), '] HEAD request failed, using estimated size:', fileSize)
+    }
 
     // Build curl command with progress bar on stderr
     const curlArgs = [
       '-L',           // Follow redirects
       '-o', outputPath,
       '-C', '-',      // Continue partial downloads
-      '--progress-bar',
+      '-#',           // Standard progress bar
       '--cookie', cookies || '',
       '--user-agent', 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
       mp4Url
     ]
 
     const curl = spawn('curl', curlArgs)
+    activeProcesses.push(curl)
+
+    curl.on('close', () => {
+      const idx = activeProcesses.indexOf(curl)
+      if (idx > -1) activeProcesses.splice(idx, 1)
+    })
 
     curl.stderr.on('data', (data: Buffer) => {
       const line = data.toString()
 
-      // Parse curl progress bar output
-      // Format: "#  10.5%   0:00:15   0:00:25   5.25M/s"
-      const percentMatch = line.match(/(\d+\.?\d*)%/)
+      // Parse curl progress bar output with multiple formats
+      // Format 1: "#  10.5%   0:00:15   0:00:25   5.25M/s"
+      // Format 2: " 10.5% of 5.08GB, 5.25M/s, remaining 0:00:15"
+      // Format 3 (with -#): "#####................. 50%"
+      let percentMatch = line.match(/(\d+\.?\d*)%/) ||
+                         line.match(/#+\s*\.+\s*(\d+)%/)
+
       if (percentMatch) {
         downloadedBytes = (parseFloat(percentMatch[1]) / 100) * fileSize
 
@@ -418,8 +506,34 @@ async function downloadWithCurl(mp4Url: string, outputPath: string, cookies: str
 
     curl.on('close', (code: number) => {
       if (code === 0) {
-        console.log('[Download] [', workerData.payload.videoId.substring(0, 8), '] curl complete:', downloadedBytes, 'bytes')
-        resolve(downloadedBytes)
+        // Verify actual file size
+        let actualSize = 0
+        try {
+          actualSize = fs.statSync(outputPath).size
+          console.log('[Download] [', workerData.payload.videoId.substring(0, 8), '] curl complete: downloadedBytes=', downloadedBytes, ', actual file size=', actualSize)
+        } catch {
+          console.log('[Download] [', workerData.payload.videoId.substring(0, 8), '] curl complete: cannot stat file')
+        }
+
+        // Check if file is too small (likely error page)
+        if (actualSize < 1000) {
+          console.log('[Download] [', workerData.payload.videoId.substring(0, 8), '] WARNING: File too small, checking content...')
+          try {
+            const content = fs.readFileSync(outputPath, 'utf8').substring(0, 200)
+            console.log('[Download] [', workerData.payload.videoId.substring(0, 8), '] File content:', content)
+
+            // Check for 401 error
+            if (content.includes('401') || content.includes('Authorization Required')) {
+              console.log('[Download] [', workerData.payload.videoId.substring(0, 8), '] CDN returned 401, will retry with HQ mode')
+              reject(new Error('CDN 401 Unauthorized'))
+              return
+            }
+          } catch {
+            console.log('[Download] [', workerData.payload.videoId.substring(0, 8), '] File is binary')
+          }
+        }
+
+        resolve(actualSize > 0 ? actualSize : downloadedBytes)
       } else {
         reject(new Error(`curl exited with code ${code}`))
       }
@@ -452,6 +566,12 @@ async function downloadWithWget(mp4Url: string, outputPath: string, cookies: str
     ]
 
     const wget = spawn('wget', wgetArgs)
+    activeProcesses.push(wget)
+
+    wget.on('close', () => {
+      const idx = activeProcesses.indexOf(wget)
+      if (idx > -1) activeProcesses.splice(idx, 1)
+    })
 
     wget.stderr.on('data', (data: Buffer) => {
       const line = data.toString()

@@ -82,6 +82,7 @@ interface AppState {
   updateQueueItem: (itemId: string, updates: Partial<QueueItem>) => void
   removeFromQueue: (itemId: string) => void
   removeFromQueueByVideoId: (videoId: string) => void
+  deleteFromQueue: (itemId: string) => Promise<void>
   reorderQueue: (newQueue: QueueItem[]) => void
   clearQueue: () => void
   getNextPendingItem: () => QueueItem | null
@@ -216,6 +217,38 @@ export const useAppStore = create<AppState>((set) => ({
     set((state) => ({
       queue: state.queue.filter((item) => item.video.id !== videoId)
     })),
+  deleteFromQueue: async (itemId) => {
+    const state = useAppStore.getState()
+    const item = state.queue.find((i) => i.id === itemId)
+
+    if (!item) return
+
+    // Pokud existuje cesta k souboru, smazat fyzický soubor
+    if (item.video.path && window.electronAPI) {
+      try {
+        const fs = await import('fs/promises')
+        await fs.unlink(item.video.path)
+        state.addLog({
+          id: crypto.randomUUID(),
+          timestamp: new Date(),
+          level: 'info',
+          message: `Soubor smazán: ${item.video.title}`,
+          source: 'queue'
+        })
+      } catch (error) {
+        state.addLog({
+          id: crypto.randomUUID(),
+          timestamp: new Date(),
+          level: 'warning',
+          message: `Nepodařilo se smazat soubor ${item.video.title}: ${error}`,
+          source: 'queue'
+        })
+      }
+    }
+
+    // Odebrat z fronty
+    state.removeFromQueue(itemId)
+  },
   reorderQueue: (newQueue) =>
     set({ queue: newQueue }),
   clearQueue: () => set({ queue: [] }),

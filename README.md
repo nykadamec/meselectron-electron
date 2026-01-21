@@ -179,6 +179,19 @@ This project is licensed under the **ISC License**. See the [LICENSE](LICENSE) f
 
 ---
 
+## 📋 Changelog
+
+### [v0.1.4] - 2026-01-21
+
+#### ✨ New Features
+- **Auto-Skip Processed Videos**: Discovery now automatically skips already processed videos and continues to next pages to reach the target count
+- **Streamlined UI**: Removed "Již zpracovaná" (Processed) section - processed videos are now filtered during discovery for a cleaner experience
+
+#### 🐛 Bug Fixes
+- **Fixed 401 Error**: Resolved video download failures caused by improperly decoded URLs (HTML entities like `&amp;` now correctly converted to `&`)
+
+---
+
 <div align="center">
 
 **Developed with ❤️ for the Prehrajto.cz Community**
